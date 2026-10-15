@@ -12,6 +12,8 @@ from abc import ABC, abstractmethod
 import numpy as np
 from numpy.typing import NDArray
 
+from .utils import initialize_weights
+
 FloatArray = NDArray[np.floating]
 
 
@@ -94,20 +96,11 @@ class Dense(Layer):
         self._inputs: FloatArray | None = None
 
     def _initialize_weights(self) -> None:
-        """
-        Initializes ``self.W`` and ``self.b`` using the global random generator.
-        `He` and `Xavier` initialization strategies: https://medium.com/thedeephub/he-and-xavier-weight-initialization-functions-acedc5322ce5
-        """
-
-        if self.weight_init == "he":
-            scale = np.sqrt(2.0 / self.in_neruons)
-        elif self.weight_init == "xavier":
-            scale = np.sqrt(1.0 / self.in_neruons)
-        else:
-            raise ValueError(f"Unknown weight_init strategy: {self.weight_init!r}")
-
-        self.W = np.random.randn(self.in_neruons, self.out_neruons) * scale
-        self.b = np.zeros((1, self.out_neruons)) if self.use_bias else np.zeros((1, self.out_neruons))
+        """Initializes ``self.W`` and ``self.b`` using the global random generator."""
+        self.W = initialize_weights(
+            (self.in_features, self.out_features), method=self.weight_init
+        )
+        self.b = np.zeros((1, self.out_features))
 
     def forward(self, inputs: FloatArray, training: bool = True) -> FloatArray:
         """Computes ``X @ W + b`` and caches the inputs for backpropagation."""
