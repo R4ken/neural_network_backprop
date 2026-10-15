@@ -27,11 +27,11 @@ class Layer(ABC):
         """Computes the layer output and caches state needed for the backward pass.
 
         Args:
-            inputs: Input array of shape ``(batch_size, in_features)``.
+            inputs: Input array of shape ``(batch_size, in_neruons)``.
             training: Whether the layer runs in training mode (affects e.g. dropout).
 
         Returns:
-            Output array of shape ``(batch_size, out_features)``.
+            Output array of shape ``(batch_size, out_neruons)``.
         """
         ...
 
@@ -40,10 +40,10 @@ class Layer(ABC):
         """Computes parameter gradients and the gradient with respect to the inputs.
 
         Args:
-            grad_output: Upstream gradient ``dL/dY`` of shape ``(batch_size, out_features)``.
+            grad_output: Upstream gradient ``dL/dY`` of shape ``(batch_size, out_neruons)``.
 
         Returns:
-            Gradient with respect to the inputs ``dL/dX`` of shape ``(batch_size, in_features)``.
+            Gradient with respect to the inputs ``dL/dX`` of shape ``(batch_size, in_neruons)``.
         """
         ...
 
@@ -76,26 +76,58 @@ class Dense(Layer):
             weight_init: Weight initialization scheme (e.g. ``"he"``, ``"xavier"``).
             use_bias: Whether to include a bias term.
         """
-        ...
+        super().__init__()
+        self.in_features = in_features
+        self.out_features = out_features
+        self.weight_init = weight_init
+        self.use_bias = use_bias
+
+        self.W: FloatArray = np.empty(0)
+        self.b: FloatArray = np.empty(0)
+        self._initialize_weights()
+
+        # Gradient (computed during backward pass)
+        self.dW: FloatArray = np.zeros_like(self.W)
+        self.db: FloatArray = np.zeros_like(self.b)
+
+        # Saving inputs during backward pass
+        self._inputs: FloatArray | None = None
 
     def _initialize_weights(self) -> None:
-        """Initializes ``self.W`` and ``self.b`` using the global random generator."""
-        ...
+        """
+        Initializes ``self.W`` and ``self.b`` using the global random generator.
+        `He` and `Xavier` initialization strategies: https://medium.com/thedeephub/he-and-xavier-weight-initialization-functions-acedc5322ce5
+        """
+
+        if self.weight_init == "he":
+            scale = np.sqrt(2.0 / self.in_neruons)
+        elif self.weight_init == "xavier":
+            scale = np.sqrt(1.0 / self.in_neruons)
+        else:
+            raise ValueError(f"Unknown weight_init strategy: {self.weight_init!r}")
+
+        self.W = np.random.randn(self.in_neruons, self.out_neruons) * scale
+        self.b = np.zeros((1, self.out_neruons)) if self.use_bias else np.zeros((1, self.out_neruons))
 
     def forward(self, inputs: FloatArray, training: bool = True) -> FloatArray:
         """Computes ``X @ W + b`` and caches the inputs for backpropagation."""
-        ...
+        self._inputs = inputs
+        output = inputs @ self.W + self.b
+        return output
 
     def backward(self, grad_output: FloatArray) -> FloatArray:
         """Computes ``dW``, ``db`` and returns the gradient with respect to the inputs."""
-        ...
+        self.dW = self._inputs.T @ grad_output
+        self.db = np.sum(grad_output, axis=0, keepdims=True)
+        grad_input = grad_output @ self.W.T
+        return grad_input
 
     @property
     def params(self) -> dict[str, FloatArray]:
         """Returns ``{"W": self.W, "b": self.b}``."""
-        ...
+        return {"W": self.W, "b": self.b}
 
     @property
     def grads(self) -> dict[str, FloatArray]:
         """Returns ``{"W": self.dW, "b": self.db}``."""
-        ...
+        return {"W": self.dW, "b": self.db}
