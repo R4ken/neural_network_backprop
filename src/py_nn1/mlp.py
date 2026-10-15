@@ -5,11 +5,22 @@ from __future__ import annotations
 import numpy as np
 from numpy.typing import NDArray
 
-from .layers import Layer
+from .layers import Dense, Layer
 from .losses import Loss
 from .optimizers import Optimizer
+from .utils import batch_iterator
 
 FloatArray = NDArray[np.floating]
+
+
+def _instantiate_layer(layer_or_type: type[Layer] | Layer) -> Layer:
+    """Instantiates a fresh Layer instance if a type is given, or creates a new instance of the same type."""
+    if isinstance(layer_or_type, type):
+        return layer_or_type()
+    try:
+        return type(layer_or_type)()
+    except Exception:
+        return layer_or_type
 
 
 class MLP:
@@ -21,15 +32,15 @@ class MLP:
         Args:
             layers: Optional initial list of layers (defaults to an empty network).
         """
-        ...
+        self.layers: list[Layer] = list(layers) if layers is not None else []
 
     @classmethod
     def from_dimensions(
         cls,
         layer_dims: list[int],
-        hidden_activation: type[Layer],
-        output_activation: type[Layer] | None = None,
-    ) -> "MLP":
+        hidden_activation: type[Layer] | Layer,
+        output_activation: type[Layer] | Layer | None = None,
+    ) -> MLP:
         """Builds an MLP from a list of neuron counts.
 
         Example:
@@ -37,13 +48,27 @@ class MLP:
 
         Args:
             layer_dims: Neuron counts per layer, e.g. ``[784, 128, 64, 10]``.
-            hidden_activation: Activation instance inserted after each hidden dense layer.
-            output_activation: Optional activation instance appended after the output layer.
+            hidden_activation: Activation instance or type inserted after each hidden dense layer.
+            output_activation: Optional activation instance or type appended after the output layer.
 
         Returns:
             A configured :class:`MLP` instance.
         """
-        ...
+        if len(layer_dims) < 2:
+            raise ValueError("layer_dims must contain at least 2 dimensions (input and output).")
+
+        layers: list[Layer] = []
+        num_layers = len(layer_dims) - 1
+        for i in range(num_layers):
+            in_dim = layer_dims[i]
+            out_dim = layer_dims[i + 1]
+            layers.append(Dense(in_dim, out_dim))
+            if i < num_layers - 1:
+                layers.append(_instantiate_layer(hidden_activation))
+            elif output_activation is not None:
+                layers.append(_instantiate_layer(output_activation))
+
+        return cls(layers)
 
     def add(self, layer: Layer) -> None:
         """Appends a layer to the network.
@@ -51,7 +76,7 @@ class MLP:
         Args:
             layer: The layer to append.
         """
-        ...
+        self.layers.append(layer)
 
     def forward(self, inputs: FloatArray, training: bool = True) -> FloatArray:
         """Passes inputs sequentially through all layers.
@@ -63,7 +88,10 @@ class MLP:
         Returns:
             The network output.
         """
-        ...
+        out = inputs
+        for layer in self.layers:
+            out = layer.forward(out, training=training)
+        return out
 
     def backward(self, grad_output: FloatArray) -> FloatArray:
         """Propagates the loss gradient backward through all layers in reverse order.
@@ -74,7 +102,10 @@ class MLP:
         Returns:
             The gradient with respect to the network inputs.
         """
-        ...
+        grad = grad_output
+        for layer in reversed(self.layers):
+            grad = layer.backward(grad)
+        return grad
 
     def train_step(
         self,
@@ -94,7 +125,13 @@ class MLP:
         Returns:
             The loss value for this batch.
         """
-        ...
+        optimizer.zero_grad(self.layers)
+        y_pred = self.forward(x_batch, training=True)
+        loss = loss_fn.forward(y_pred, y_batch)
+        grad_output = loss_fn.backward(y_pred, y_batch)
+        self.backward(grad_output)
+        optimizer.step(self.layers)
+        return float(loss)
 
     def fit(
         self,
@@ -122,7 +159,37 @@ class MLP:
         Returns:
             A history dictionary, e.g. ``{"loss": [...], "val_loss": [...]}``.
         """
-        ...
+        history: dict[str, list[float]] = {"loss": []}
+        if validation_data is not None:
+            history["val_loss"] = []
+
+        for epoch in range(1, epochs + 1):
+            epoch_loss_sum = 0.0
+            total_samples = 0
+            for x_batch, y_batch in batch_iterator(
+                x_train, y_train, batch_size=batch_size, shuffle=True
+            ):
+                batch_loss = self.train_step(x_batch, y_batch, loss_fn, optimizer)
+                batch_len = len(x_batch)
+                epoch_loss_sum += batch_loss * batch_len
+                total_samples += batch_len
+
+            epoch_loss = float(epoch_loss_sum / total_samples) if total_samples > 0 else 0.0
+            history["loss"].append(epoch_loss)
+
+            if validation_data is not None:
+                x_val, y_val = validation_data
+                val_loss = self.evaluate(x_val, y_val, loss_fn)
+                history["val_loss"].append(val_loss)
+                if verbose:
+                    print(
+                        f"Epoch {epoch}/{epochs} - loss: {epoch_loss:.4f} - val_loss: {val_loss:.4f}"
+                    )
+            else:
+                if verbose:
+                    print(f"Epoch {epoch}/{epochs} - loss: {epoch_loss:.4f}")
+
+        return history
 
     def predict(self, inputs: FloatArray) -> FloatArray:
         """Runs a forward pass in inference mode (``training=False``).
@@ -133,7 +200,7 @@ class MLP:
         Returns:
             The network output.
         """
-        ...
+        return self.forward(inputs, training=False)
 
     def evaluate(
         self,
@@ -151,4 +218,5 @@ class MLP:
         Returns:
             The mean loss over the dataset.
         """
-        ...
+        y_pred = self.predict(x_test)
+        return float(loss_fn.forward(y_pred, y_test))
