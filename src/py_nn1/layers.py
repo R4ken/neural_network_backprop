@@ -61,13 +61,14 @@ class Layer(ABC):
 
 
 class Dense(Layer):
-    """A fully connected (linear) layer computing ``Y = X @ W + b``."""
+    """A fully connected (linear) layer computing ``Y = X @ W + b`` (or ``Y = X @ W``)."""
 
     def __init__(
         self,
         in_features: int,
         out_features: int,
-        weight_init: str = "he"
+        weight_init: str = "he",
+        use_bias: bool = True,
     ) -> None:
         """Creates a dense layer.
 
@@ -75,49 +76,65 @@ class Dense(Layer):
             in_features: Number of input features.
             out_features: Number of output features (neurons).
             weight_init: Weight initialization scheme (e.g. ``"he"``, ``"xavier"``).
+            use_bias: Whether to include and learn a bias vector.
         """
         super().__init__()
         self.in_features = in_features
         self.out_features = out_features
         self.weight_init = weight_init
+        self.use_bias = use_bias
 
         self.W: FloatArray = np.empty(0)
-        self.b: FloatArray = np.empty(0)
+        self.b: FloatArray | None = None
         self._initialize_weights()
 
         # Gradient (computed during backward pass)
         self.dW: FloatArray = np.zeros_like(self.W)
-        self.db: FloatArray = np.zeros_like(self.b)
+        self.db: FloatArray | None = (
+            np.zeros_like(self.b) if self.use_bias and self.b is not None else None
+        )
 
         # Saving inputs during backward pass
         self._inputs: FloatArray | None = None
 
     def _initialize_weights(self) -> None:
-        """Initializes ``self.W`` and ``self.b`` using the global random generator."""
+        """Initializes ``self.W`` and optionally ``self.b``."""
         self.W = initialize_weights(
             (self.in_features, self.out_features), method=self.weight_init
         )
-        self.b = np.zeros((1, self.out_features))
+        if self.use_bias:
+            self.b = np.zeros((1, self.out_features))
+        else:
+            self.b = None
 
     def forward(self, inputs: FloatArray, training: bool = True) -> FloatArray:
-        """Computes ``X @ W + b`` and caches the inputs for backpropagation."""
+        """Computes ``X @ W + b`` (or ``X @ W``) and caches inputs for backpropagation."""
         self._inputs = inputs
-        output = inputs @ self.W + self.b
+        output = inputs @ self.W
+        if self.use_bias and self.b is not None:
+            output = output + self.b
         return output
 
     def backward(self, grad_output: FloatArray) -> FloatArray:
-        """Computes ``dW``, ``db`` and returns the gradient with respect to the inputs."""
+        """Computes parameter gradients and returns gradient with respect to inputs."""
         self.dW = self._inputs.T @ grad_output
-        self.db = np.sum(grad_output, axis=0, keepdims=True)
+        if self.use_bias and self.db is not None:
+            self.db = np.sum(grad_output, axis=0, keepdims=True)
         grad_input = grad_output @ self.W.T
         return grad_input
 
     @property
     def params(self) -> dict[str, FloatArray]:
-        """Returns ``{"W": self.W, "b": self.b}``."""
-        return {"W": self.W, "b": self.b}
+        """Returns trainable parameters (``{"W": self.W}`` or with ``"b"``)."""
+        p = {"W": self.W}
+        if self.use_bias and self.b is not None:
+            p["b"] = self.b
+        return p
 
     @property
     def grads(self) -> dict[str, FloatArray]:
-        """Returns ``{"W": self.dW, "b": self.db}``."""
-        return {"W": self.dW, "b": self.db}
+        """Returns parameter gradients matching keys in :attr:`params`."""
+        g = {"W": self.dW}
+        if self.use_bias and self.db is not None:
+            g["b"] = self.db
+        return g

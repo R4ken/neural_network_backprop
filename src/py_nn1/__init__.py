@@ -5,7 +5,15 @@ from .layers import Dense, Layer
 from .losses import BinaryCrossEntropyLoss, CategoricalCrossEntropyLoss, Loss, MSELoss
 from .mlp import MLP
 from .optimizers import SGD, Optimizer
-from .utils import batch_iterator, get_rng, initialize_weights, set_seed
+from .utils import (
+    batch_iterator,
+    check_matching_shapes,
+    compute_multiclass_accuracy,
+    compute_multilabel_accuracy,
+    get_rng,
+    initialize_weights,
+    set_seed,
+)
 
 __all__ = [
     "Activation",
@@ -23,6 +31,9 @@ __all__ = [
     "Softmax",
     "Tanh",
     "batch_iterator",
+    "check_matching_shapes",
+    "compute_multiclass_accuracy",
+    "compute_multilabel_accuracy",
     "get_rng",
     "initialize_weights",
     "set_seed",

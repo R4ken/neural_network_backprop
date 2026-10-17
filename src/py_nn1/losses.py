@@ -11,6 +11,8 @@ from abc import ABC, abstractmethod
 import numpy as np
 from numpy.typing import NDArray
 
+from .utils import check_matching_shapes
+
 FloatArray = NDArray[np.floating]
 
 
@@ -53,10 +55,12 @@ class MSELoss(Loss):
 
     def forward(self, y_pred: FloatArray, y_true: FloatArray) -> float:
         """Computes the mean squared error."""
+        check_matching_shapes(y_pred, y_true)
         return float(np.mean((y_pred - y_true) ** 2))
 
     def backward(self, y_pred: FloatArray, y_true: FloatArray) -> FloatArray:
         """Computes ``2 * (y_pred - y_true) / N``."""
+        check_matching_shapes(y_pred, y_true)
         return 2.0 * (y_pred - y_true) / y_pred.size
 
 
@@ -65,12 +69,14 @@ class BinaryCrossEntropyLoss(Loss):
 
     def forward(self, y_pred: FloatArray, y_true: FloatArray) -> float:
         """Computes the binary cross-entropy (with clipping for numerical stability)."""
+        check_matching_shapes(y_pred, y_true)
         eps = 1e-15
         p = np.clip(y_pred, eps, 1.0 - eps)
         return float(-np.mean(y_true * np.log(p) + (1.0 - y_true) * np.log(1.0 - p)))
 
     def backward(self, y_pred: FloatArray, y_true: FloatArray) -> FloatArray:
         """Computes the gradient of binary cross-entropy with respect to predictions."""
+        check_matching_shapes(y_pred, y_true)
         eps = 1e-15
         p = np.clip(y_pred, eps, 1.0 - eps)
         return ((-y_true / p) + (1.0 - y_true) / (1.0 - p)) / y_pred.size
@@ -81,12 +87,14 @@ class CategoricalCrossEntropyLoss(Loss):
 
     def forward(self, y_pred: FloatArray, y_true: FloatArray) -> float:
         """Computes the categorical cross-entropy (with clipping for numerical stability)."""
+        check_matching_shapes(y_pred, y_true)
         eps = 1e-15
         p = np.clip(y_pred, eps, 1.0 - eps)
         return float(-np.mean(np.sum(y_true * np.log(p), axis=1)))
 
     def backward(self, y_pred: FloatArray, y_true: FloatArray) -> FloatArray:
         """Computes the gradient of categorical cross-entropy with respect to predictions."""
+        check_matching_shapes(y_pred, y_true)
         eps = 1e-15
         p = np.clip(y_pred, eps, 1.0 - eps)
         n = y_pred.shape[0]

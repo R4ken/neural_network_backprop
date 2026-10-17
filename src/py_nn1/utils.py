@@ -91,3 +91,65 @@ def batch_iterator(
         batch_idx = indices[start : start + batch_size]
         yield x[batch_idx], y[batch_idx]
 
+
+def check_matching_shapes(y_pred: FloatArray, y_true: FloatArray) -> None:
+    """Validates that predictions and ground-truth targets have identical shapes.
+
+    Args:
+        y_pred: Prediction array.
+        y_true: Target array.
+
+    Raises:
+        ValueError: If y_pred.shape != y_true.shape.
+    """
+    if y_pred.shape != y_true.shape:
+        raise ValueError(
+            f"Shape mismatch: y_pred shape {y_pred.shape} != y_true shape {y_true.shape}."
+        )
+
+
+def compute_multilabel_accuracy(
+    y_pred: FloatArray,
+    y_true: FloatArray,
+    threshold: float = 0.5,
+) -> float:
+    """Computes accuracy for binary or multi-label classification using a threshold.
+
+    Args:
+        y_pred: Predicted probabilities with the same shape as y_true.
+        y_true: Ground truth binary targets (0 or 1).
+        threshold: Decision threshold for positive prediction (default: 0.5).
+
+    Returns:
+        Fraction of correctly predicted labels as a float in [0.0, 1.0].
+    """
+    check_matching_shapes(y_pred, y_true)
+    preds = (y_pred >= threshold).astype(int)
+    return float(np.mean(preds == y_true))
+
+
+def compute_multiclass_accuracy(
+    y_pred: FloatArray,
+    y_true: FloatArray,
+) -> float:
+    """Computes accuracy for multi-class classification.
+
+    Args:
+        y_pred: Predicted class probabilities or logits of shape (N, C).
+        y_true: Ground truth targets, either 1D class indices of shape (N,)
+            or 2D one-hot encoded targets of shape (N, C).
+
+    Returns:
+        Fraction of correctly predicted samples as a float in [0.0, 1.0].
+    """
+    if y_pred.shape[0] != y_true.shape[0]:
+        raise ValueError(
+            f"Batch size mismatch: y_pred has {y_pred.shape[0]} samples, "
+            f"but y_true has {y_true.shape[0]} samples."
+        )
+
+    pred_labels = np.argmax(y_pred, axis=1)
+    true_labels = np.argmax(y_true, axis=1) if y_true.ndim > 1 else y_true
+    return float(np.mean(pred_labels == true_labels))
+
+

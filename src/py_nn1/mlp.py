@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import numpy as np
 from numpy.typing import NDArray
 
@@ -31,6 +33,8 @@ class MLP:
         layer_dims: list[int],
         hidden_activation: type[Activation],
         output_activation: type[Activation] | None = None,
+        use_bias: bool = True,
+        weight_init: str = "he",
     ) -> MLP:
         """Builds an MLP from a list of neuron counts.
 
@@ -41,6 +45,8 @@ class MLP:
             layer_dims: Neuron counts per layer, e.g. ``[784, 128, 64, 10]``.
             hidden_activation: Activation type inserted after each hidden dense layer.
             output_activation: Optional activation type appended after the output layer.
+            use_bias: Whether dense layers should learn a bias vector.
+            weight_init: Initialization method for weights (e.g. ``"he"``, ``"xavier"``).
 
         Returns:
             A configured :class:`MLP` instance.
@@ -53,7 +59,7 @@ class MLP:
         for i in range(num_layers):
             in_dim = layer_dims[i]
             out_dim = layer_dims[i + 1]
-            layers.append(Dense(in_dim, out_dim))
+            layers.append(Dense(in_dim, out_dim, weight_init=weight_init, use_bias=use_bias))
             if i < num_layers - 1:
                 layers.append(hidden_activation())
             elif output_activation is not None:
@@ -134,7 +140,7 @@ class MLP:
         batch_size: int = 32,
         validation_data: tuple[FloatArray, FloatArray] | None = None,
         verbose: bool = True,
-    ) -> dict[str, list[float]]:
+    ) -> dict[str, list[Any]]:
         """Trains the network over the given number of epochs and mini-batches.
 
         Args:
@@ -148,25 +154,43 @@ class MLP:
             verbose: Whether to print progress.
 
         Returns:
-            A history dictionary, e.g. ``{"loss": [...], "val_loss": [...]}``.
+            A history dictionary with keys:
+            - ``"loss"``: Average training loss per epoch.
+            - ``"iteration_loss"``: Loss evaluated at each mini-batch step.
+            - ``"weight_norms"``: List of Frobenius norms for each Dense layer per epoch.
+            - ``"val_loss"``: Validation loss per epoch (if validation_data provided).
         """
-        history: dict[str, list[float]] = {"loss": []}
+        history: dict[str, list[Any]] = {
+            "loss": [],
+            "iteration_loss": [],
+            "weight_norms": [],
+        }
         if validation_data is not None:
             history["val_loss"] = []
 
         for epoch in range(1, epochs + 1):
             epoch_loss_sum = 0.0
             total_samples = 0
+
             for x_batch, y_batch in batch_iterator(
                 x_train, y_train, batch_size=batch_size, shuffle=True
             ):
                 batch_loss = self.train_step(x_batch, y_batch, loss_fn, optimizer)
+                history["iteration_loss"].append(batch_loss)
+
                 batch_len = len(x_batch)
                 epoch_loss_sum += batch_loss * batch_len
                 total_samples += batch_len
 
             epoch_loss = float(epoch_loss_sum / total_samples) if total_samples > 0 else 0.0
             history["loss"].append(epoch_loss)
+
+            epoch_norms = [
+                float(np.linalg.norm(layer.W))
+                for layer in self.layers
+                if isinstance(layer, Dense)
+            ]
+            history["weight_norms"].append(epoch_norms)
 
             if validation_data is not None:
                 x_val, y_val = validation_data
