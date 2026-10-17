@@ -5,22 +5,13 @@ from __future__ import annotations
 import numpy as np
 from numpy.typing import NDArray
 
+from .activations import Activation
 from .layers import Dense, Layer
 from .losses import Loss
 from .optimizers import Optimizer
 from .utils import batch_iterator
 
 FloatArray = NDArray[np.floating]
-
-
-def _instantiate_layer(layer_or_type: type[Layer] | Layer) -> Layer:
-    """Instantiates a fresh Layer instance if a type is given, or creates a new instance of the same type."""
-    if isinstance(layer_or_type, type):
-        return layer_or_type()
-    try:
-        return type(layer_or_type)()
-    except Exception:
-        return layer_or_type
 
 
 class MLP:
@@ -38,18 +29,18 @@ class MLP:
     def from_dimensions(
         cls,
         layer_dims: list[int],
-        hidden_activation: type[Layer] | Layer,
-        output_activation: type[Layer] | Layer | None = None,
+        hidden_activation: type[Activation],
+        output_activation: type[Activation] | None = None,
     ) -> MLP:
         """Builds an MLP from a list of neuron counts.
 
         Example:
-            ``MLP.from_dimensions([784, 128, 10], ReLU(), Softmax())``.
+            ``MLP.from_dimensions([784, 128, 10], ReLU, Softmax)``.
 
         Args:
             layer_dims: Neuron counts per layer, e.g. ``[784, 128, 64, 10]``.
-            hidden_activation: Activation instance or type inserted after each hidden dense layer.
-            output_activation: Optional activation instance or type appended after the output layer.
+            hidden_activation: Activation type inserted after each hidden dense layer.
+            output_activation: Optional activation type appended after the output layer.
 
         Returns:
             A configured :class:`MLP` instance.
@@ -64,9 +55,9 @@ class MLP:
             out_dim = layer_dims[i + 1]
             layers.append(Dense(in_dim, out_dim))
             if i < num_layers - 1:
-                layers.append(_instantiate_layer(hidden_activation))
+                layers.append(hidden_activation())
             elif output_activation is not None:
-                layers.append(_instantiate_layer(output_activation))
+                layers.append(output_activation())
 
         return cls(layers)
 

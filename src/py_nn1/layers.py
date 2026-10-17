@@ -67,8 +67,7 @@ class Dense(Layer):
         self,
         in_features: int,
         out_features: int,
-        weight_init: str = "he",
-        use_bias: bool = True,
+        weight_init: str = "he"
     ) -> None:
         """Creates a dense layer.
 
@@ -76,13 +75,11 @@ class Dense(Layer):
             in_features: Number of input features.
             out_features: Number of output features (neurons).
             weight_init: Weight initialization scheme (e.g. ``"he"``, ``"xavier"``).
-            use_bias: Whether to include a bias term.
         """
         super().__init__()
         self.in_features = in_features
         self.out_features = out_features
         self.weight_init = weight_init
-        self.use_bias = use_bias
 
         self.W: FloatArray = np.empty(0)
         self.b: FloatArray = np.empty(0)
