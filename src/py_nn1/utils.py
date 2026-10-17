@@ -91,10 +91,3 @@ def batch_iterator(
         batch_idx = indices[start : start + batch_size]
         yield x[batch_idx], y[batch_idx]
 
-    if shuffle:
-        _rng.shuffle(indices)
-
-    for start in range(0, n_samples, batch_size):
-        batch_idx = indices[start : start + batch_size]
-        yield x[batch_idx], y[batch_idx]
-
