@@ -7,6 +7,7 @@ from .data_loader import (
     load_regression_data,
     to_one_hot,
 )
+from .plotting import plot_classification_dataset
 
 __all__ = [
     "ClassificationDataset",
@@ -14,4 +15,6 @@ __all__ = [
     "load_classification_data",
     "load_regression_data",
     "to_one_hot",
+    "plot_classification_dataset",
 ]
+
