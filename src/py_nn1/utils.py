@@ -153,3 +153,34 @@ def compute_multiclass_accuracy(
     return float(np.mean(pred_labels == true_labels))
 
 
+def compute_mae(y_pred: FloatArray, y_true: FloatArray) -> float:
+    """Computes the mean absolute error (MAE) for regression.
+
+    Args:
+        y_pred: Predicted continuous values with the same shape as y_true.
+        y_true: Ground truth continuous targets.
+
+    Returns:
+        The mean absolute error as a float.
+    """
+    check_matching_shapes(y_pred, y_true)
+    return float(np.mean(np.abs(y_pred - y_true)))
+
+
+def compute_r2(y_pred: FloatArray, y_true: FloatArray) -> float:
+    """Computes the coefficient of determination (R^2) for regression.
+
+    Args:
+        y_pred: Predicted continuous values with the same shape as y_true.
+        y_true: Ground truth continuous targets.
+
+    Returns:
+        The R^2 score as a float. Returns ``0.0`` when the targets have zero
+        variance (the score is undefined in that case).
+    """
+    check_matching_shapes(y_pred, y_true)
+    ss_res = float(np.sum((y_true - y_pred) ** 2))
+    ss_tot = float(np.sum((y_true - np.mean(y_true)) ** 2))
+    if ss_tot == 0.0:
+        return 0.0
+    return 1.0 - ss_res / ss_tot

@@ -9,7 +9,7 @@ This module provides plotting functions adhering to project requirements:
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -17,16 +17,33 @@ import numpy as np
 if __package__ is None or __package__ == "":
     import sys
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-    from experiments.common.data_loader import ClassificationDataset, load_classification_data
+    from experiments.common.data_loader import (
+        ClassificationDataset,
+        RegressionDataset,
+        load_classification_data,
+        load_regression_data,
+    )
     from src.py_nn1 import NeuronTrajectory
 else:
-    from .data_loader import ClassificationDataset, load_classification_data
+    from .data_loader import (
+        ClassificationDataset,
+        RegressionDataset,
+        load_classification_data,
+        load_regression_data,
+    )
     from src.py_nn1 import NeuronTrajectory
 
 
 def _resolve_classification_results_dir() -> Path:
     """Locates or creates the default results directory for classification."""
     results_dir = Path(__file__).resolve().parents[1] / "results" / "classification"
+    results_dir.mkdir(parents=True, exist_ok=True)
+    return results_dir
+
+
+def _resolve_regression_results_dir() -> Path:
+    """Locates or creates the default results directory for regression."""
+    results_dir = Path(__file__).resolve().parents[1] / "results" / "regression"
     results_dir.mkdir(parents=True, exist_ok=True)
     return results_dir
 
@@ -95,6 +112,179 @@ def plot_classification_dataset(
     fig.savefig(target_path, dpi=150, bbox_inches="tight")
     plt.close(fig)
 
+    return target_path
+
+
+def plot_regression_dataset(
+    dataset: RegressionDataset,
+    save_path: Path | str | None = None,
+    alpha: float = 0.55,
+    point_size: float = 12.0,
+) -> Path:
+    """Plots a 1D regression dataset in a side-by-side (1x2) train and test layout.
+
+    Args:
+        dataset: RegressionDataset instance containing raw train and test splits.
+        save_path: Destination path for saving the figure. If None, defaults to
+            'experiments/results/regression/dataset_{name}_{n_samples}.png'.
+        alpha: Transparency level of points for visualizing density.
+        point_size: Scatter point size (s).
+
+    Returns:
+        Path pointing to the saved figure file.
+    """
+    if save_path is None:
+        filename = f"dataset_{dataset.name}_{dataset.n_samples}.png"
+        target_path = _resolve_regression_results_dir() / filename
+    else:
+        target_path = Path(save_path)
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # Train and test splits come from different x ranges (test often extrapolates),
+    # so each panel keeps its own axis limits.
+    fig, (ax_train, ax_test) = plt.subplots(1, 2, figsize=(12, 5))
+
+    splits = [
+        (ax_train, dataset.x_train, dataset.y_train, f"Zbiór uczący (N = {len(dataset.x_train)})"),
+        (ax_test, dataset.x_test, dataset.y_test, f"Zbiór testowy (N = {len(dataset.x_test)})"),
+    ]
+
+    for ax, x, y, split_title in splits:
+        ax.scatter(
+            x[:, 0],
+            y[:, 0],
+            color="#1f77b4",
+            alpha=alpha,
+            s=point_size,
+            edgecolors="none",
+            label="Próbki danych",
+        )
+        ax.set_title(split_title, fontsize=12, fontweight="bold")
+        ax.set_xlabel("Wejście $x$", fontsize=11)
+        ax.set_ylabel("Wartość docelowa $y$", fontsize=11)
+        ax.grid(True, linestyle="--", alpha=0.5)
+        ax.legend(title="Dane", loc="best")
+
+    fig.suptitle(
+        f"Zbiór danych regresji: {dataset.name} (N = {dataset.n_samples})",
+        fontsize=14,
+        fontweight="bold",
+    )
+    fig.tight_layout()
+
+    fig.savefig(target_path, dpi=150, bbox_inches="tight")
+    plt.close(fig)
+
+    return target_path
+
+
+def plot_regression_approximations_grid(
+    models: dict[str, Any],
+    dataset: RegressionDataset,
+    save_path: Path | str,
+    split: Literal["train", "test"] = "train",
+    seed: int | None = None,
+    grid_points: int = 500,
+    point_size: float = 14.0,
+    alpha: float = 0.5,
+) -> Path:
+    """Plots 1D regression approximations for multiple models side-by-side (1xN grid).
+
+    The model curve is evaluated on a dense, sorted grid spanning the domain of
+    the selected split. For ``split="test"`` two vertical dashed lines mark the
+    training-domain boundaries, so extrapolation is visually explicit.
+
+    Args:
+        models: Dictionary mapping activation name to a trained model instance.
+        dataset: RegressionDataset instance.
+        save_path: Destination path for the saved image.
+        split: Split used for the scatter points and the evaluation domain.
+        seed: Optional random seed of the representative model (shown in the title).
+        grid_points: Number of points in the dense evaluation grid.
+        point_size: Scatter point size for the data samples.
+        alpha: Alpha transparency for the data points.
+
+    Returns:
+        Path to the saved figure.
+    """
+    if split not in {"train", "test"}:
+        raise ValueError(f"Invalid split {split!r}. Expected 'train' or 'test'.")
+
+    target_path = Path(save_path)
+    target_path.parent.mkdir(parents=True, exist_ok=True)
+
+    n_models = len(models)
+    fig, axes = plt.subplots(1, n_models, figsize=(5.3 * n_models, 4.8))
+    if n_models == 1:
+        axes = [axes]
+
+    if split == "train":
+        x_points, y_points = dataset.x_train, dataset.y_train
+        split_title = "zbiór uczący"
+        point_label = "Próbki zbioru uczącego"
+    else:
+        x_points, y_points = dataset.x_test, dataset.y_test
+        split_title = "zbiór testowy (ekstrapolacja)"
+        point_label = "Próbki zbioru testowego"
+
+    x_grid = np.linspace(
+        float(np.min(x_points)), float(np.max(x_points)), grid_points
+    ).reshape(-1, 1)
+
+    train_min = float(np.min(dataset.x_train))
+    train_max = float(np.max(dataset.x_train))
+
+    palette = {"Sigmoid": "#1f77b4", "Tanh": "#2ca02c", "ReLU": "#d62728"}
+
+    for ax, (act_name, model) in zip(axes, models.items()):
+        y_grid = np.asarray(model.predict(x_grid)).ravel()
+        color = palette.get(act_name, None)
+
+        ax.scatter(
+            x_points[:, 0],
+            y_points[:, 0],
+            color="#7f7f7f",
+            alpha=alpha,
+            s=point_size,
+            edgecolors="none",
+            label=point_label,
+            zorder=1,
+        )
+        ax.plot(
+            x_grid[:, 0],
+            y_grid,
+            color=color,
+            linewidth=2.2,
+            label=f"Aproksymacja ({act_name})",
+            zorder=2,
+        )
+
+        if split == "test":
+            ax.axvline(
+                train_min,
+                color="black",
+                linestyle="--",
+                linewidth=1.4,
+                label="Granice zbioru uczącego",
+                zorder=0,
+            )
+            ax.axvline(train_max, color="black", linestyle="--", linewidth=1.4, zorder=0)
+
+        ax.set_title(f"Aktywacja: {act_name}", fontsize=12, fontweight="bold")
+        ax.set_xlabel("Wejście $x$", fontsize=11)
+        ax.set_ylabel(r"Wyjście modelu $\hat{y}$", fontsize=11)
+        ax.grid(True, linestyle="--", alpha=0.5)
+        ax.legend(loc="best", fontsize=8.5)
+
+    seed_suffix = f" (Ziarno: {seed})" if seed is not None else ""
+    fig.suptitle(
+        f"Aproksymacja funkcji jednoargumentowej: {dataset.name} – {split_title}{seed_suffix}",
+        fontsize=14,
+        fontweight="bold",
+    )
+    fig.tight_layout()
+    fig.savefig(target_path, dpi=150, bbox_inches="tight")
+    plt.close(fig)
     return target_path
 
 
@@ -214,6 +404,7 @@ def plot_learning_curves_with_std(
     metric_label: str,
     title: str,
     save_path: Path | str,
+    sharey: bool = False,
 ) -> Path:
     """Plots training and test learning curves side-by-side with std dev bands across seeds.
 
@@ -223,6 +414,8 @@ def plot_learning_curves_with_std(
         metric_label: Label for the metric on the Y-axis (in Polish).
         title: Main title of the figure (in Polish).
         save_path: Destination path for the saved image.
+        sharey: Whether train and test panels share the Y-axis scale. Defaults to
+            False because regression test losses may be orders of magnitude larger.
 
     Returns:
         Path to the saved figure.
@@ -230,7 +423,7 @@ def plot_learning_curves_with_std(
     target_path = Path(save_path)
     target_path.parent.mkdir(parents=True, exist_ok=True)
 
-    fig, (ax_train, ax_test) = plt.subplots(1, 2, figsize=(13, 5), sharey=True)
+    fig, (ax_train, ax_test) = plt.subplots(1, 2, figsize=(13, 5), sharey=sharey)
 
     palette = {"Sigmoid": "#1f77b4", "Tanh": "#2ca02c", "ReLU": "#d62728"}
     splits = [
@@ -923,3 +1116,9 @@ if __name__ == "__main__":
             output_file = plot_classification_dataset(loaded_ds)
             print(f"-> Zapisano wykres dla '{dataset_name}': {output_file}")
 
+    print("Generowanie przykladowych wykresow zbiorow danych regresji...")
+    for dataset_name in ("activation", "cube"):
+        for n in (100, 1000):
+            loaded_ds = load_regression_data(name=dataset_name, n_samples=n)
+            output_file = plot_regression_dataset(loaded_ds)
+            print(f"-> Zapisano wykres dla '{dataset_name}': {output_file}")
