@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Callable
 
 import numpy as np
 from numpy.typing import NDArray
@@ -14,6 +14,7 @@ from .optimizers import Optimizer
 from .utils import batch_iterator
 
 FloatArray = NDArray[np.floating]
+MetricFn = Callable[[FloatArray, FloatArray], float]
 
 
 class MLP:
@@ -139,6 +140,7 @@ class MLP:
         epochs: int = 100,
         batch_size: int = 32,
         validation_data: tuple[FloatArray, FloatArray] | None = None,
+        metrics: dict[str, MetricFn] | None = None,
         verbose: bool = True,
     ) -> dict[str, list[Any]]:
         """Trains the network over the given number of epochs and mini-batches.
@@ -151,6 +153,7 @@ class MLP:
             epochs: Number of passes over the training data.
             batch_size: Number of samples per mini-batch.
             validation_data: Optional ``(x_val, y_val)`` evaluated each epoch.
+            metrics: Optional dictionary mapping metric names to evaluation functions.
             verbose: Whether to print progress.
 
         Returns:
@@ -159,6 +162,8 @@ class MLP:
             - ``"iteration_loss"``: Loss evaluated at each mini-batch step.
             - ``"weight_norms"``: List of Frobenius norms for each Dense layer per epoch.
             - ``"val_loss"``: Validation loss per epoch (if validation_data provided).
+            - ``"<metric_name>"``: Metric value on training data per epoch (if metrics provided).
+            - ``"val_<metric_name>"``: Metric value on validation data per epoch (if metrics and validation_data provided).
         """
         history: dict[str, list[Any]] = {
             "loss": [],
@@ -167,6 +172,12 @@ class MLP:
         }
         if validation_data is not None:
             history["val_loss"] = []
+
+        if metrics is not None:
+            for name in metrics:
+                history[name] = []
+                if validation_data is not None:
+                    history[f"val_{name}"] = []
 
         for epoch in range(1, epochs + 1):
             epoch_loss_sum = 0.0
@@ -192,6 +203,7 @@ class MLP:
             ]
             history["weight_norms"].append(epoch_norms)
 
+            val_loss = None
             if validation_data is not None:
                 x_val, y_val = validation_data
                 val_loss = self.evaluate(x_val, y_val, loss_fn)
@@ -203,6 +215,27 @@ class MLP:
             else:
                 if verbose:
                     print(f"Epoch {epoch}/{epochs} - loss: {epoch_loss:.4f}")
+
+            if metrics is not None:
+                y_pred_tr = self.predict(x_train)
+                for name, metric_fn in metrics.items():
+                    history[name].append(float(metric_fn(y_pred_tr, y_train)))
+
+                if validation_data is not None:
+                    y_pred_val = self.predict(validation_data[0])
+                    for name, metric_fn in metrics.items():
+                        history[f"val_{name}"].append(float(metric_fn(y_pred_val, validation_data[1])))
+
+            if verbose:
+                msg = f"Epoch {epoch}/{epochs} - loss: {epoch_loss:.4f}"
+                if val_loss is not None:
+                    msg += f" - val_loss: {val_loss:.4f}"
+                if metrics is not None:
+                    for name in metrics:
+                        msg += f" - {name}: {history[name][-1]:.4f}"
+                        if validation_data is not None:
+                            msg += f" - val_{name}: {history[f'val_{name}'][-1]:.4f}"
+                print(msg)
 
         return history
 
