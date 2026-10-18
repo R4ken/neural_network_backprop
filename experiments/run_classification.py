@@ -31,6 +31,7 @@ from experiments.common.data_loader import ClassificationDataset, load_classific
 from experiments.common.plotting import (
     plot_decision_boundaries_grid,
     plot_learning_curves_with_std,
+    plot_neuron_weights_trajectory,
     plot_weight_norms_with_std,
 )
 from src.py_nn1 import (
@@ -38,6 +39,7 @@ from src.py_nn1 import (
     SGD,
     BinaryCrossEntropyLoss,
     CategoricalCrossEntropyLoss,
+    NeuronTrajectory,
     ReLU,
     Sigmoid,
     Softmax,
@@ -55,7 +57,7 @@ def _get_results_dir() -> Path:
     return results_dir
 
 
-def run_experiment_k1(seeds: list[int] | None = None) -> None:
+def run_experiment_k1(seeds: list[int] | None = None, n_samples: int = 100) -> None:
     """Runs Experiment K1: Impact of activation functions in hidden layers.
 
     Evaluates Sigmoid, Tanh, and ReLU on data.simple (binary) and data.three_gauss
@@ -63,11 +65,10 @@ def run_experiment_k1(seeds: list[int] | None = None) -> None:
 
     Args:
         seeds: Random seeds for statistical evaluation. Defaults to [42, 123, 999].
+        n_samples: Number of samples in dataset. Defaults to 100 so that results are intentionally worse.
     """
     if seeds is None:
         seeds = [42, 123, 999]
-
-    n_samples = 100
 
     results_dir = _get_results_dir()
     print("=" * 70)
@@ -124,6 +125,7 @@ def run_experiment_k1(seeds: list[int] | None = None) -> None:
         loss_curves: dict[str, dict[str, list[list[float]]]] = {}
         acc_curves: dict[str, dict[str, list[list[float]]]] = {}
         norm_curves: dict[str, list[list[list[float]]]] = {}
+        rep_neuron_trajectories: dict[str, NeuronTrajectory] = {}
         rep_models: dict[str, MLP] = {}
 
         for act_name, act_cls, init_method in activation_configs:
@@ -171,9 +173,10 @@ def run_experiment_k1(seeds: list[int] | None = None) -> None:
                 final_train_accs.append(history["acc"][-1])
                 final_test_accs.append(history["val_acc"][-1])
 
-                # Store the model trained on the primary seed (42) for boundary visualization
+                # Store the model and neuron trajectories for the primary seed (42)
                 if seed == seeds[0]:
                     rep_models[act_name] = model
+                    rep_neuron_trajectories[act_name] = history["tracked_neuron_weights"]
 
             summary_rows.append({
                 "dataset": ds_name,
@@ -237,6 +240,17 @@ def run_experiment_k1(seeds: list[int] | None = None) -> None:
             save_path=norm_plot_path,
         )
         print(f"   [Wykres] Zapisano ewolucję norm wag: {norm_plot_path.name}")
+
+        # Plot 5: First neuron weights evolution across layers (representative seed)
+        neuron_plot_path = results_dir / f"k1_{ds_name}_neuron_weights.png"
+        plot_neuron_weights_trajectory(
+            epochs=epochs_range,
+            trajectories_by_act=rep_neuron_trajectories,
+            layer_names=layer_names,
+            title=f"Ewolucja wagi i biasu pierwszego neuronu poszczególnych warstw (Sigmoid vs ReLU vs Tanh): {ds_name} (Ziarno: {seeds[0]})",
+            save_path=neuron_plot_path,
+        )
+        print(f"   [Wykres] Zapisano ewolucję wag pierwszego neuronu: {neuron_plot_path.name}")
 
     # Save summary metrics to CSV
     csv_path = results_dir / "k1_summary_metrics.csv"

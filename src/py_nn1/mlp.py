@@ -8,13 +8,15 @@ import numpy as np
 from numpy.typing import NDArray
 
 from .activations import Activation
-from .layers import Dense, Layer
+from .layers import Dense, Layer, NeuronWeights
 from .losses import Loss
 from .optimizers import Optimizer
 from .utils import batch_iterator
 
 FloatArray = NDArray[np.floating]
 MetricFn = Callable[[FloatArray, FloatArray], float]
+EpochNeuronWeights = list[NeuronWeights]
+NeuronTrajectory = list[EpochNeuronWeights]
 
 
 class MLP:
@@ -161,6 +163,7 @@ class MLP:
             - ``"loss"``: Average training loss per epoch.
             - ``"iteration_loss"``: Loss evaluated at each mini-batch step.
             - ``"weight_norms"``: List of Frobenius norms for each Dense layer per epoch.
+            - ``"tracked_neuron_weights"``: :class:`NeuronTrajectory` containing first neuron parameters per layer per epoch.
             - ``"val_loss"``: Validation loss per epoch (if validation_data provided).
             - ``"<metric_name>"``: Metric value on training data per epoch (if metrics provided).
             - ``"val_<metric_name>"``: Metric value on validation data per epoch (if metrics and validation_data provided).
@@ -169,6 +172,7 @@ class MLP:
             "loss": [],
             "iteration_loss": [],
             "weight_norms": [],
+            "tracked_neuron_weights": [],
         }
         if validation_data is not None:
             history["val_loss"] = []
@@ -202,6 +206,13 @@ class MLP:
                 if isinstance(layer, Dense)
             ]
             history["weight_norms"].append(epoch_norms)
+
+            epoch_neuron_weights = [
+                weights
+                for layer in self.layers
+                if (weights := layer.first_neuron_weights) is not None
+            ]
+            history["tracked_neuron_weights"].append(epoch_neuron_weights)
 
             val_loss = None
             if validation_data is not None:

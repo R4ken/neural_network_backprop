@@ -96,6 +96,9 @@ Zgodnie z punktami 2.1 oraz 2.1.3 wymagań, każdy badany wariant modelu analizo
 ### Filar III: Wizualizacja wartości wag w kolejnych iteracjach uczenia
 * **Normy Frobeniusa macierzy wag:**
   * Przebieg normy $\|W^{(l)}\|_F = \sqrt{\sum_{i,j} (w_{ij}^{(l)})^2}$ dla każdej warstwy $l$ w funkcji epok. Pozwala na jednoznaczną identyfikację zjawiska zablokowania uczenia, zanikającego gradientu (brak przyrostu normy) lub eksplozji wag.
+* **Trajektorie wagi i biasu pierwszego neuronu (Standard 1x3 dla reprezentatywnego ziarna):**
+  * Zunifikowany wykres wielopanelowy 1x3 prezentujący ewolucję pierwszej wagi wejściowej $w_{0,0}$ (linia ciągła) oraz biasu $b_0$ (linia przerywana) pierwszego neuronu dla każdej kolejnej warstwy w funkcji epok dla **reprezentatywnego modelu** (pierwsze ziarno losowe, np. `seed = 42`). 
+  * *Uzasadnienie metodologiczne:* Ze względu na symetrię permutacji neuronów ukrytych (*permutation symmetry*), ten sam indeks neuronu w różnych ziarnach pełni inną rolę w sieci. Uśrednianie wag pojedynczych neuronów po wielu ziarnach prowadzi do sztucznego znoszenia się wartości do zera i myląco dużego odchylenia standardowego. Dlatego wielkości niezmiennicze na permutacje (Loss, Accuracy, $\|W\|_F$) uśredniamy po ziarnach ($\mu \pm \sigma$), natomiast trajektorie pojedynczych wag i biasów obrazujemy na modelu reprezentatywnym.
 * **Trajektorie wybranych współczynników wagowych:**
   * Śledzenie wartości 4–6 pojedynczych wag $w_{ij}(t)$ z warstwy początkowej i końcowej w czasie uczenia, ilustrujące stabilizację parametrów na plateau.
 * **Rozkłady wag (histogramy):**
@@ -130,6 +133,8 @@ Zbadanie wpływu doboru nieliniowej funkcji aktywacji wewnątrz sieci na zdolno�
    * Wykres liniowy: *„Przebieg funkcji straty (MSE) w kolejnych epokach dla badanych funkcji aktywacji”* (zbiór uczący i testowy).
 3. **Ewolucja wag i gradientów:**
    * Wykres liniowy: *„Zmiana normy wag warstw ukrytych \|\|W\|\| w kolejnych epokach dla badanych funkcji aktywacji”*.
+4. **Ewolucja wagi i biasu pierwszego neuronu:**
+   * Wykres wielopanelowy 1x3: *„Ewolucja wagi i biasu pierwszego neuronu poszczególnych warstw (Sigmoid vs ReLU vs Tanh)”*.
 
 ---
 
@@ -164,6 +169,8 @@ Należy przetestować warianty od 0 do 4 warstw ukrytych:
    * Wykres liniowy: *„Krzywe uczenia (błąd w epokach) dla architektur o różnej głębokości”*.
 4. **Wizualizacja wag dla sieci najgłębszej (4 warstwy):**
    * Wykres liniowy: *„Ewolucja normy wag poszczególnych warstw w sieci 4-warstwowej”* (porównanie pierwszej warstwy ukrytej z ostatnią).
+5. **Ewolucja wagi i biasu pierwszego neuronu:**
+   * Wykres wielopanelowy 1x3: *„Ewolucja wagi i biasu pierwszego neuronu poszczególnych warstw w zależności od architektury”*.
 
 ---
 
@@ -188,6 +195,8 @@ Porównanie dynamiki uczenia perceptronu przy optymalizacji błędu średniokwad
    * Wykres liniowy: *„Przebieg straty w kolejnych iteracjach: MSE vs MAE”* (znormalizowany lub przedstawiony w niezależnych skalach).
 3. **Stabilność parametrów:**
    * Wykres liniowy: *„Trajektoria wybranej wagi w czasie: oscylacje MAE vs zbieżność MSE”*.
+4. **Ewolucja wagi i biasu pierwszego neuronu:**
+   * Wykres wielopanelowy 1x3: *„Ewolucja wagi i biasu pierwszego neuronu poszczególnych warstw (MSE vs MAE)”*.
 
 ---
 
@@ -215,7 +224,7 @@ Ocena wpływu funkcji aktywacji w warstwach ukrytych (`Sigmoid`, `Tanh`, `ReLU`)
 * **Hipoteza:** `ReLU` zapewni najszybszą redukcję straty i odporność na zanikający gradient, tworząc łamane (odcinkowo liniowe) granice decyzyjne. `Sigmoid` w warstwach ukrytych będzie zbiegać najwolniej. `Tanh` wygeneruje gładkie granice decyzyjne i osiągnie dobrą dynamikę dzięki centrowaniu wokół zera.
 
 #### 2. Konfiguracja
-* **Zbiory danych:** `data.simple.train.1000.csv` / `test.1000.csv` oraz `data.three_gauss.train.1000.csv` / `test.1000.csv`.
+* **Zbiory danych:** `data.simple.train.100.csv` / `test.100.csv` oraz `data.three_gauss.train.100.csv` / `test.100.csv`.
 * **Architektura:** Stała, np. `[2, 32, 16, C]`, gdzie $C \in \{1, 3\}$ w zależności od zadania.
 * **Parametry:** `lr = 0.05`, `batch_size = 32`, `epochs = 150`, optymalizator `SGD`, `use_bias = True`.
 * **Inicjalizacja:** `xavier` dla Sigmoid i Tanh, `he` dla ReLU.
@@ -228,6 +237,8 @@ Ocena wpływu funkcji aktywacji w warstwach ukrytych (`Sigmoid`, `Tanh`, `ReLU`)
    * Wykres liniowy: *„Dokładność klasyfikacji (Accuracy [%]) na zbiorze testowym w funkcji epok”*.
 3. **Normy wag:**
    * Wykres liniowy: *„Ewolucja normy wag \|\|W\|\| w kolejnych epokach dla badanych funkcji aktywacji”*.
+4. **Ewolucja wagi i biasu pierwszego neuronu:**
+   * Wykres wielopanelowy 1x3: *„Ewolucja wagi i biasu pierwszego neuronu poszczególnych warstw (Sigmoid vs ReLU vs Tanh)”* (dla reprezentatywnego ziarna).
 
 ---
 
@@ -261,6 +272,8 @@ Analiza zdolności dyskryminacyjnej perceptronu przy przejściu od modelu liniow
    * Wykres liniowy: *„Przebieg funkcji straty dla architektur o głębokości od 0 do 4 warstw”*.
 4. **Ewolucja wag w sieci głębokiej:**
    * Wykres liniowy: *„Ewolucja norm wag poszczególnych warstw w sieci 4-warstwowej”*.
+5. **Ewolucja wagi i biasu pierwszego neuronu:**
+   * Wykres wielopanelowy 1x3: *„Ewolucja wagi i biasu pierwszego neuronu poszczególnych warstw w zależności od architektury”*.
 
 ---
 
@@ -284,6 +297,8 @@ Porównanie skuteczności optymalizacji funkcji entropii krzyżowej (`CrossEntro
    * Zestawienie 2D: *„Granice decyzyjne wyznaczone przy optymalizacji Entropią Krzyżową oraz MSE”*.
 3. **Dynamika gradientów:**
    * Wykres liniowy: *„Norma aktualizacji wag w początkowych epokach: Cross-Entropy vs MSE”* (uwidocznienie ucieczki ze stanu nasycenia).
+4. **Ewolucja wagi i biasu pierwszego neuronu:**
+   * Wykres wielopanelowy 1x3: *„Ewolucja wagi i biasu pierwszego neuronu poszczególnych warstw (Cross-Entropy vs MSE)”*.
 
 ---
 
@@ -291,15 +306,15 @@ Porównanie skuteczności optymalizacji funkcji entropii krzyżowej (`CrossEntro
 
 Poniższa tabela stanowi jednoznaczne podsumowanie dla procedur implementacyjnych:
 
-| Identyfikator | Zadanie | Cel badania | Zmienna badana | Wartości zmiennej | Wyjście sieci / Funkcja celu | Metryki ewaluacji |
+| Identyfikator | Zadanie | Cel badania | Zmienna badana | Wartości zmiennej | Wyjście sieci / Funkcja celu | Metryki i wizualizacje |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **R1** | Regresja | Funkcje aktywacji | Aktywacja ukryta | `Sigmoid`, `Tanh`, `ReLU` | Linear / `MSELoss` | MSE, trajektoria aproksymacji |
-| **R2** | Regresja | Architektura sieci | Głębokość i szerokość | 0–4 warstwy ukryte (od `[1,1]` do `[1,64,32,16,8,1]`) | Linear / `MSELoss` | MSE, $R^2$, krzywa 1D |
-| **R3** | Regresja | Miara błędu | Funkcja straty | `MSELoss` vs `MAELoss` | Linear | MSE, MAE, odporność |
-`MSELoss` | Błąd generalizacji, MSE |
-| **K1** | Klasyfikacja | Funkcje aktywacji | Aktywacja ukryta | `Sigmoid`, `Tanh`, `ReLU` | Sigmoid/Softmax / `CrossEntropy` | Accuracy [%], Loss, Granice 2D |
-| **K2** | Klasyfikacja | Architektura sieci | Głębokość i szerokość | 0–4 warstwy ukryte (od `[2,C]` do `[2,64,32,16,8,C]`) | Sigmoid/Softmax / `CrossEntropy` | Accuracy [%], Granice 2D |
-| **K3** | Klasyfikacja | Miara błędu | Funkcja straty | `CrossEntropyLoss` vs `MSELoss` | Sigmoid/Softmax | Accuracy [%], tempo zbieżności |
+| **R1** | Regresja | Funkcje aktywacji | Aktywacja ukryta | `Sigmoid`, `Tanh`, `ReLU` | Linear / `MSELoss` | MSE, aproksymacja, $\|W\|$, wagi neuronu 0 |
+| **R2** | Regresja | Architektura sieci | Głębokość i szerokość | 0–4 warstwy ukryte (od `[1,1]` do `[1,64,32,16,8,1]`) | Linear / `MSELoss` | MSE, $R^2$, krzywa 1D, $\|W\|$, wagi neuronu 0 |
+| **R3** | Regresja | Miara błędu | Funkcja straty | `MSELoss` vs `MAELoss` | Linear | MSE, MAE, odporność, wagi neuronu 0 |
+| **R4** | Regresja | Rozmiar próby | Liczność $N$ | 100, 500, 1000, 10000 | Linear / `MSELoss` | Błąd generalizacji, MSE, krzywa 1D |
+| **K1** | Klasyfikacja | Funkcje aktywacji | Aktywacja ukryta | `Sigmoid`, `Tanh`, `ReLU` | Sigmoid/Softmax / `CrossEntropy` | Accuracy [%], Loss, Granice 2D, $\|W\|$, wagi neuronu 0 |
+| **K2** | Klasyfikacja | Architektura sieci | Głębokość i szerokość | 0–4 warstwy ukryte (od `[2,C]` do `[2,64,32,16,8,C]`) | Sigmoid/Softmax / `CrossEntropy` | Accuracy [%], Granice 2D, $\|W\|$, wagi neuronu 0 |
+| **K3** | Klasyfikacja | Miara błędu | Funkcja straty | `CrossEntropyLoss` vs `MSELoss` | Sigmoid/Softmax | Accuracy [%], tempo zbieżności, $\|W\|$, wagi neuronu 0 |
 
 ---
 

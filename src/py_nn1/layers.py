@@ -15,6 +15,7 @@ from numpy.typing import NDArray
 from .utils import initialize_weights
 
 FloatArray = NDArray[np.floating]
+NeuronWeights = dict[str, float]
 
 
 class Layer(ABC):
@@ -58,6 +59,11 @@ class Layer(ABC):
     def grads(self) -> dict[str, FloatArray]:
         """Returns the parameter gradients with the same keys as :attr:`params`."""
         ...
+
+    @property
+    def first_neuron_weights(self) -> NeuronWeights | None:
+        """Returns the weight and bias of the first neuron, or None for parameter-free layers."""
+        return None
 
 
 class Dense(Layer):
@@ -138,3 +144,13 @@ class Dense(Layer):
         if self.use_bias and self.db is not None:
             g["b"] = self.db
         return g
+
+    @property
+    def first_neuron_weights(self) -> NeuronWeights | None:
+        """Returns the first incoming weight w_0,0 and bias b_0 of the first neuron using self.params."""
+        p = self.params
+        if "W" not in p or p["W"].size == 0:
+            return None
+        w_val = float(p["W"][0, 0])
+        b_val = float(p["b"][0, 0]) if "b" in p and p["b"] is not None and p["b"].size > 0 else 0.0
+        return {"w": w_val, "b": b_val}

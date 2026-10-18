@@ -9,6 +9,7 @@ This module provides plotting functions adhering to project requirements:
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -17,8 +18,10 @@ if __package__ is None or __package__ == "":
     import sys
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
     from experiments.common.data_loader import ClassificationDataset, load_classification_data
+    from src.py_nn1 import NeuronTrajectory
 else:
     from .data_loader import ClassificationDataset, load_classification_data
+    from src.py_nn1 import NeuronTrajectory
 
 
 def _resolve_classification_results_dir() -> Path:
@@ -295,6 +298,73 @@ def plot_weight_norms_with_std(
         ax.set_ylabel(r"Norma Frobeniusa $\|W\|_F$", fontsize=11)
         ax.grid(True, linestyle="--", alpha=0.5)
         ax.legend(title="Funkcja aktywacji", loc="best", fontsize=10)
+
+    fig.suptitle(title, fontsize=14, fontweight="bold")
+    fig.tight_layout()
+    fig.savefig(target_path, dpi=150, bbox_inches="tight")
+    plt.close(fig)
+    
+def plot_neuron_weights_trajectory(
+    epochs: list[int] | np.ndarray,
+    trajectories_by_act: dict[str, NeuronTrajectory],
+    layer_names: list[str],
+    title: str,
+    save_path: Path | str,
+) -> Path:
+    """Plots weights and biases of the first neuron for each layer across epochs for a single representative seed.
+
+    Args:
+        epochs: Sequence of epoch numbers (1 to E).
+        trajectories_by_act: Dict mapping activation name to a single seed run.
+            The run contains epochs, each epoch contains list of layer dicts {"w": ..., "b": ...}.
+        layer_names: Descriptive Polish names for each layer.
+        title: Main title of the figure (in Polish).
+        save_path: Destination path for saving the figure.
+
+    Returns:
+        Path to the saved figure file.
+    """
+    target_path = Path(save_path)
+    target_path.parent.mkdir(parents=True, exist_ok=True)
+
+    n_layers = len(layer_names)
+    fig, axes = plt.subplots(1, n_layers, figsize=(6.0 * n_layers, 5.2), sharex=True)
+    if n_layers == 1:
+        axes = [axes]
+
+    palette = {"Sigmoid": "#1f77b4", "Tanh": "#2ca02c", "ReLU": "#d62728"}
+
+    for layer_idx, (ax, l_name) in enumerate(zip(axes, layer_names)):
+        for act_name, epoch_list in trajectories_by_act.items():
+            w_vals = [epoch_layers[layer_idx].get("w", 0.0) for epoch_layers in epoch_list]
+            b_vals = [epoch_layers[layer_idx].get("b", 0.0) for epoch_layers in epoch_list]
+            color = palette.get(act_name, None)
+
+            # Weight trajectory (solid line)
+            ax.plot(
+                epochs,
+                w_vals,
+                label=f"{act_name} (waga $w_{{0,0}}$)",
+                color=color,
+                linestyle="-",
+                linewidth=2.0,
+            )
+
+            # Bias trajectory (dashed line)
+            ax.plot(
+                epochs,
+                b_vals,
+                label=f"{act_name} (bias $b_0$)",
+                color=color,
+                linestyle="--",
+                linewidth=1.8,
+            )
+
+        ax.set_title(l_name, fontsize=12, fontweight="bold")
+        ax.set_xlabel("Epoka", fontsize=11)
+        ax.set_ylabel("Wartość parametru (Waga / Bias)", fontsize=11)
+        ax.grid(True, linestyle="--", alpha=0.5)
+        ax.legend(loc="best", fontsize=8.5)
 
     fig.suptitle(title, fontsize=14, fontweight="bold")
     fig.tight_layout()
