@@ -1,5 +1,175 @@
-\documentclass{article}
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage[polish]{babel}
+\usepackage{polski}
+\usepackage{geometry}
+\geometry{
+    top=2.5cm,
+    bottom=2.5cm,
+    left=2.5cm,
+    right=2.5cm
+}
+
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{subcaption}
+\usepackage{float}
+\usepackage{microtype}
+\usepackage[hidelinks]{hyperref}
+
 \begin{document}
-Hello, LaTeX in VS Code!
-\[ E = mc^2 \]
+
+\pagenumbering{gobble}
+% ==============================================================================
+% STRONA TYTUŁOWA
+% ==============================================================================
+\begin{titlepage}
+    \centering
+    \vspace*{1.5cm}
+    
+    {\scshape\Large Politechnika Warszawska \par}
+    \vspace{0.3cm}
+    {\scshape\large Wydział Matematyki i Nauk Informacyjnych \par}
+    
+    \vspace{3.0cm}
+    
+    {\huge\bfseries Projekt 1: Klasyfikacja i regresja\\[0.3em]z użyciem perceptronu\par}
+    
+    \vspace{1.0cm}
+    {\Large\itshape Przedmiot: Sieci Neuronowe \par}
+    
+    \vspace{3.5cm}
+    
+    \begin{minipage}[t]{0.48\textwidth}
+        \flushleft
+        \textbf{Autorzy:}\\[0.3em]
+        Jan Najowski\\
+        Stefan Stawicki
+    \end{minipage}
+    \hfill
+    \begin{minipage}[t]{0.48\textwidth}
+        \flushright
+        \textbf{Prowadzący:}\\[0.3em]
+        [Tytuł / Stopień, Imię i Nazwisko]
+    \end{minipage}
+    
+    \vfill
+    
+    {\large Warszawa, \today \par}
+\end{titlepage}
+
+% ==============================================================================
+% SPIS TREŚCI
+% ==============================================================================
+\pagenumbering{roman}
+\tableofcontents
+\newpage
+
+\pagenumbering{arabic}
+% ==============================================================================
+% 1. WSTĘP I CEL PROJEKTU
+% ==============================================================================
+\section{Wstęp i cel projektu}
+Celem niniejszego projektu jest samodzielna implementacja wielowarstwowego perceptronu 
+(\textit{Multilayer Perceptron}, MLP) od podstaw z wykorzystaniem wyłącznie biblioteki \texttt{NumPy}.
+W ramach implementacji, przygotowano algorytm wstecznej propagacji błędu oraz stochastycznego spadku gradientu (\textit{Stochastic Gradient Descent}).
+Przygotowany model posłużył do rozwiązania zagadnień aproksymacji nieliniowej dla funkcji $\mathbb{R} \to \mathbb{R}$ 
+(zadanie regresji) oraz przydzielania klas punktom w przestrzeni $\mathbb{R}^2$ (zadanie klasyfikacji binarnej i wieloklasowej).
+W ramach pracy zbadano kilka aspektów wpływających na działanie sieci, takich jak dobór funkcji aktywacji (Sigmoid, Tanh, ReLU),
+głębokości i szerokości architektury (od 0 do 4 warstw ukrytych) oraz zastosowanych miar błędu na wyjściu modelu (MSE, BCE, CCE).
+
+\section{Implementacja wielowarstwowego perceptronu (MLP)}
+
+Kod źródłowy został podzielony na następujące moduły:
+\begin{itemize}
+    \item \textbf{layers} — definiuje klasę bazową warstwy oraz warstwę w pełni połączoną (\texttt{Dense}),
+    odpowiedzialną za transformację liniową, przechowywanie wag i biasów, a także inicjalizację wag przy pomocy zdefiniowanych rozkładów \cite{he_xavier_init}.
+    \item \textbf{activations} — zawiera implementacje funkcji aktywacji (\texttt{ReLU}, \texttt{Sigmoid}, \texttt{Tanh}, i \texttt{Softmax})
+    wraz z metodami wyznaczania ich pochodnych na potrzeby propagacji wstecznej.
+    \item \textbf{losses} — zawiera implementacje funkcji straty: błąd średniokwadratowy (\texttt{MSE}), binarna (\texttt{BCE}) i kategoryczna entropia krzyżowa (\texttt{CCE}).
+    \item \textbf{optimizers} — implementuje algorytm \textit{Stochastic gradient descent}.
+    \item \textbf{mlp} — zamyka funckjonalność sieci w klasie \texttt{MLP}, przechowując listę warstw i implementując: propagację w przód, propagację wsteczną oraz kroki optymalizatora.
+    \item \textbf{utils} — zawiera funkcje pomocnicze, w tym tworzenie mini batch'y, narzędzia do kodowania one-hot, metryki ewaluacyjne oraz ustawianie globalnego ziarna losowości.
+\end{itemize}
+
+Proces uczenia modelu sterowany jest przez metodę \texttt{MLP.fit()}, która w trakcie iteracji po kolejnych mini batchach i epokach na bieżąco zapisuje
+postępy uczenia. Wszystkie metadane zbierane są w formie słownika. Wśród jego kluczy znajdują się m.in. funkcje straty 
+(w skali poszczególnych mini batchy oraz średnie na epokę dla zbioru treningowego i walidacyjnego)
+wprowadzone metryki (np. \textit{Accuracy} dla klasyfikacji), normy Frobeniusa macierzy wag (dla wizualizacji postępów uczenia)
+oraz zmiany wartości kilku wybranych z góry wag sieci.
+
+% ==============================================================================
+% 3. EKSPERYMENTY — ZAGADNIENIE REGRESJI
+% ==============================================================================
+\section{Eksperymenty — Zagadnienie regresji}
+
+\subsection{Zbiory danych i metodyka badawcza}
+% TODO: Opisz charakterystykę badanych zbiorów danych (data.activation, data.cube).
+% - Zakresy wartości cech i celów, zastosowany preprocessing (np. standaryzacja z-score).
+% - Dobór warstwy wyjściowej (aktywacja liniowa / brak aktywacji).
+
+\subsection{Wpływ funkcji aktywacji w warstwach ukrytych}
+% TODO: Porównaj działanie badanych funkcji aktywacji (np. Sigmoid, Tanh, ReLU).
+% - Umieść wykresy i tabele według potrzeb.
+% - Wnioski: gładkość krzywej aproksymacji, tempo zbieżności błędu, zachowanie wag.
+
+\subsection{Wpływ architektury sieci: głębokość i szerokość}
+% TODO: Zbadaj wpływ liczby warstw ukrytych (od 0 do 4) oraz liczby neuronów w warstwach.
+% - Wnioski: pojemność aproksymacyjna modelu, ryzyko przeuczenia/niedouczenia.
+
+\subsection{Wpływ miary błędu (funkcji straty)}
+% TODO: Porównaj optymalizację przy użyciu błędu średniokwadratowego (MSE) oraz bezwzględnego (MAE).
+% - Wnioski: dynamika gradientu, stabilność parametrów w sąsiedztwie minimum.
+
+\subsection{Wpływ rozmiaru zbioru danych (opcjonalnie)}
+% TODO: Analiza wpływu liczności próby treningowej (N = 100, 500, 1000, 10000) na generalizację.
+
+\subsection{Podsumowanie i wnioski z części regresyjnej}
+% TODO: Syntetyczne wnioski końcowe dotyczące regresji.
+
+
+% ==============================================================================
+% 4. EKSPERYMENTY — ZAGADNIENIE KLASYFIKACJI
+% ==============================================================================
+\section{Eksperymenty — Zagadnienie klasyfikacji}
+
+\subsection{Zbiory danych i metodyka badawcza}
+% TODO: Opisz zbiory klasyfikacyjne w R^2 (data.simple, data.three_gauss).
+% - Dobór warstwy wyjściowej i kodowania etykiet (Sigmoid dla binarnej, Softmax dla wieloklasowej).
+
+\subsection{Wpływ funkcji aktywacji w warstwach ukrytych}
+% TODO: Porównaj działanie badanych funkcji aktywacji (Sigmoid, Tanh, ReLU).
+% - Wnioski: kształt i geometria granic decyzyjnych w 2D, szybkość uczenia i dokładność (Accuracy).
+
+\subsection{Wpływ architektury sieci: głębokość i szerokość}
+% TODO: Zbadaj wpływ głębokości (0 do 4 warstw) na zdolność rozdzielania klas.
+% - Wnioski: ograniczenia modelu liniowego (0 warstw) vs nieliniowe granice sieci głębokich.
+
+\subsection{Wpływ miary błędu (funkcji straty)}
+% TODO: Porównaj entropię krzyżową (Cross-Entropy) oraz błąd średniokwadratowy (MSE).
+% - Wnioski: zjawisko nasycenia gradientu dla MSE przy wyjściu sigmoidalnym/softmaxowym.
+
+\subsection{Podsumowanie i wnioski z części klasyfikacyjnej}
+% TODO: Syntetyczne wnioski końcowe dotyczące klasyfikacji.
+
+
+% ==============================================================================
+% 5. PODSUMOWANIE OGÓLNE I WNIOSKI KOŃCOWE
+% ==============================================================================
+\section{Podsumowanie ogólne i wnioski końcowe}
+% TODO: Zbiorcze podsumowanie całego projektu, kluczowe spostrzeżenia i rekomendacje dotyczące doboru hiperparametrów w MLP.
+
+% ==============================================================================
+% BIBLIOGRAFIA
+% ==============================================================================
+\begin{thebibliography}{9}
+\bibitem{he_xavier_init}
+The Deep Hub, \emph{He and Xavier Weight Initialization Functions},
+\url{https://medium.com/thedeephub/he-and-xavier-weight-initialization-functions-acedc5322ce5}.
+\end{thebibliography}
+
 \end{document}
