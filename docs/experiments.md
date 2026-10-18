@@ -251,29 +251,34 @@ Analiza zdolności dyskryminacyjnej perceptronu przy przejściu od modelu liniow
   * 1–2 warstwy ukryte: Pozwolą na pełne i płynne odseparowanie klas.
   * 3–4 warstwy ukryte: Wykażą zdolność tworzenia bardzo złożonych granic, ale przy prostym SGD mogą wykazywać wolniejszy start zbieżności w początkowych warstwach.
 
-#### 2. Badane architektury
-1. **0 warstw ukrytych:** `[2, C]` (model liniowy / regresja logistyczna)
-2. **1 warstwa ukryta:**
-   * Wąska: `[2, 4, C]`
-   * Średnia: `[2, 16, C]`
-   * Szeroka: `[2, 64, C]`
-3. **2 warstwy ukryte:** `[2, 16, 8, C]` oraz `[2, 32, 16, C]`
-4. **3 warstwy ukryte:** `[2, 32, 16, 8, C]`
-5. **4 warstwy ukryte:** `[2, 64, 32, 16, 8, C]`
-
-* **Parametry stałe:** Wybrana najlepsza aktywacja z K1, `CrossEntropyLoss`, `batch_size = 32`, `epochs = 150`, stały `learning_rate`.
+#### 2. Konfiguracja i badane architektury
+* **Zbiory danych:** `data.simple.train.100.csv` / `test.100.csv` oraz `data.three_gauss.train.100.csv` / `test.100.csv` ($N = 100$ domyślnie w celu uwypuklenia różnic pojemności i ryzyka przeuczenia/niedouczenia; opcjonalnie $N = 1000$).
+* **Funkcja aktywacji w warstwach ukrytych:** `ReLU` z inicjalizacją wag `he` (wyłoniona jako najskuteczniejsza w K1).
+* **Warstwa wyjściowa i funkcja celu:** `Sigmoid` + `BinaryCrossEntropyLoss` dla `data.simple`; `Softmax` + `CategoricalCrossEntropyLoss` dla `data.three_gauss`.
+* **Badane architektury (8 wariantów):**
+  1. **0 warstw ukrytych:** `[2, C]` (model liniowy / regresja logistyczna)
+  2. **1 warstwa ukryta (wąska):** `[2, 4, C]`
+  3. **1 warstwa ukryta (średnia):** `[2, 16, C]`
+  4. **1 warstwa ukryta (szeroka):** `[2, 64, C]`
+  5. **2 warstwy ukryte (A):** `[2, 16, 8, C]`
+  6. **2 warstwy ukryte (B):** `[2, 32, 16, C]`
+  7. **3 warstwy ukryte:** `[2, 32, 16, 8, C]`
+  8. **4 warstwy ukryte:** `[2, 64, 32, 16, 8, C]`
+* **Parametry treningu:** `lr = 0.01` (obniżone dla stabilności w sieciach 4-warstwowych), `batch_size = 32`, `epochs = 250`, optymalizator `SGD`, `seeds = [42, 123, 999]`.
 
 #### 3. Wytwarzane wykresy (w języku polskim)
 1. **Wpływ architektury na granice decyzyjne:**
-   * Siatka wykresów (grid): *„Ewolucja kształtu granic decyzyjnych w zależności od liczby warstw ukrytych (0–4 warstw)”*.
+   * Siatka wykresów 2x4 (grid): *„Ewolucja kształtu granic decyzyjnych w zależności od liczby warstw ukrytych (0–4 warstw)”* wraz z punktami testowymi.
 2. **Skuteczność klasyfikacji:**
-   * Wykres słupkowy: *„Dokładność klasyfikacji na zbiorze testowym w zależności od architektury sieci”*.
-3. **Zbieżność w epokach:**
-   * Wykres liniowy: *„Przebieg funkcji straty dla architektur o głębokości od 0 do 4 warstw”*.
-4. **Ewolucja wag w sieci głębokiej:**
-   * Wykres liniowy: *„Ewolucja norm wag poszczególnych warstw w sieci 4-warstwowej”*.
-5. **Ewolucja wagi i biasu pierwszego neuronu:**
-   * Wykres wielopanelowy 1x3: *„Ewolucja wagi i biasu pierwszego neuronu poszczególnych warstw w zależności od architektury”*.
+   * Zgrupowany wykres słupkowy (Train vs Test): *„Dokładność klasyfikacji na zbiorze uczącym i testowym w zależności od architektury sieci”* ze słupkami błędu $\pm 1 \sigma$.
+3. **Krzywe straty w epokach:**
+   * Wykres liniowy dwupanelowy 1x2 (Zbiór uczący vs Zbiór testowy): *„Przebieg funkcji straty dla architektur o głębokości od 0 do 4 warstw”* ze wstęgami $\pm 1 \sigma$.
+4. **Krzywe dokładności w epokach:**
+   * Wykres liniowy dwupanelowy 1x2 (Train Accuracy vs Test Accuracy): *„Dokładność klasyfikacji w kolejnych epokach dla badanych architektur”* ze wstęgami $\pm 1 \sigma$.
+5. **Ewolucja wag w sieci najgłębszej:**
+   * Wykres liniowy: *„Ewolucja norm wag poszczególnych warstw w sieci 4-warstwowej”* (dla wszystkich 5 warstw Dense).
+6. **Ewolucja wagi i biasu pierwszego neuronu:**
+   * Wykres wielopanelowy 1x3: *„Ewolucja wagi i biasu pierwszego neuronu w pierwszej warstwie ukrytej (płytka vs średnia vs głęboka)”* (dla reprezentatywnego ziarna).
 
 ---
 
