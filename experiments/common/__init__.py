@@ -3,7 +3,6 @@
 from .data_loader import (
     ClassificationDataset,
     RegressionDataset,
-    StandardScaler,
     load_classification_data,
     load_regression_data,
     to_one_hot,
@@ -12,9 +11,7 @@ from .data_loader import (
 __all__ = [
     "ClassificationDataset",
     "RegressionDataset",
-    "StandardScaler",
     "load_classification_data",
     "load_regression_data",
     "to_one_hot",
 ]
-

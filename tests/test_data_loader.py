@@ -4,37 +4,12 @@ import unittest
 import numpy as np
 
 from experiments.common.data_loader import (
-    StandardScaler,
     to_one_hot,
     load_regression_data,
     load_classification_data,
     RegressionDataset,
     ClassificationDataset,
 )
-
-
-class TestStandardScaler(unittest.TestCase):
-    def test_fit_transform_inverse_transform(self):
-        data = np.array([[10.0, 200.0], [20.0, 400.0], [30.0, 600.0]])
-        scaler = StandardScaler()
-        scaled = scaler.fit_transform(data)
-
-        # Check zero mean and unit variance
-        np.testing.assert_allclose(np.mean(scaled, axis=0), [0.0, 0.0], atol=1e-7)
-        np.testing.assert_allclose(np.std(scaled, axis=0), [1.0, 1.0], atol=1e-7)
-
-        # Check inverse transform recovers original
-        recovered = scaler.inverse_transform(scaled)
-        np.testing.assert_allclose(recovered, data, atol=1e-7)
-
-    def test_constant_feature(self):
-        data = np.array([[5.0], [5.0], [5.0]])
-        scaler = StandardScaler()
-        scaled = scaler.fit_transform(data)
-        # Difference from mean is 0, std is 0 -> scale_ fallback 1.0 -> 0.0
-        np.testing.assert_allclose(scaled, [[0.0], [0.0], [0.0]], atol=1e-7)
-        recovered = scaler.inverse_transform(scaled)
-        np.testing.assert_allclose(recovered, data, atol=1e-7)
 
 
 class TestToOneHot(unittest.TestCase):
@@ -61,37 +36,26 @@ class TestToOneHot(unittest.TestCase):
 
 
 class TestRegressionDataLoader(unittest.TestCase):
-    def test_load_activation_with_standardization(self):
-        ds = load_regression_data("activation", n_samples=100, standardize=True)
+    def test_load_activation(self):
+        ds = load_regression_data("activation", n_samples=100)
         self.assertIsInstance(ds, RegressionDataset)
         self.assertEqual(ds.x_train.shape, (100, 1))
         self.assertEqual(ds.y_train.shape, (100, 1))
         self.assertEqual(ds.x_test.shape[1], 1)
         self.assertEqual(ds.y_test.shape[1], 1)
 
-        # Check standardized stats on train
-        np.testing.assert_allclose(np.mean(ds.x_train), 0.0, atol=1e-6)
-        np.testing.assert_allclose(np.std(ds.x_train), 1.0, atol=1e-6)
-        np.testing.assert_allclose(np.mean(ds.y_train), 0.0, atol=1e-6)
-        np.testing.assert_allclose(np.std(ds.y_train), 1.0, atol=1e-6)
+        # Raw values in activation: x in [-2, 5], y in [-265, -2]
+        self.assertTrue(np.all(ds.y_train < 0.0))
 
         # Test unpacking
         x_tr, y_tr, x_te, y_te = ds
         self.assertEqual(x_tr.shape, (100, 1))
         self.assertEqual(y_tr.shape, (100, 1))
 
-        # Test inverse scaling on y
-        self.assertIsNotNone(ds.scaler_y)
-        unscaled_y_tr = ds.scaler_y.inverse_transform(y_tr)
-        # Activation y range is [-265, -2]
-        self.assertTrue(np.all(unscaled_y_tr < 0.0))
-
-    def test_load_cube_without_standardization(self):
-        ds = load_regression_data("cube", n_samples=500, standardize=False)
+    def test_load_cube(self):
+        ds = load_regression_data("cube", n_samples=500)
         self.assertEqual(ds.x_train.shape, (500, 1))
         self.assertEqual(ds.y_train.shape, (500, 1))
-        self.assertIsNone(ds.scaler_x)
-        self.assertIsNone(ds.scaler_y)
 
 
 class TestClassificationDataLoader(unittest.TestCase):
@@ -102,9 +66,11 @@ class TestClassificationDataLoader(unittest.TestCase):
         self.assertEqual(ds.y_train.shape, (100, 1))
         self.assertEqual(ds.num_classes, 2)
 
-        # Labels are 0 and 1
-        unique_labels = np.unique(ds.y_train_labels)
+        # Labels are train_labels and test_labels (without y_ prefix)
+        unique_labels = np.unique(ds.train_labels)
         np.testing.assert_array_equal(unique_labels, [0, 1])
+        unique_test_labels = np.unique(ds.test_labels)
+        np.testing.assert_array_equal(unique_test_labels, [0, 1])
 
         # Targets are in {0.0, 1.0}
         self.assertTrue(set(np.unique(ds.y_train)).issubset({0.0, 1.0}))
@@ -126,7 +92,7 @@ class TestClassificationDataLoader(unittest.TestCase):
         self.assertEqual(ds.num_classes, 3)
 
         # Labels 0, 1, 2
-        unique_labels = np.unique(ds.y_train_labels)
+        unique_labels = np.unique(ds.train_labels)
         np.testing.assert_array_equal(unique_labels, [0, 1, 2])
 
         # One hot rows sum to 1
