@@ -11,3 +11,10 @@ wheels/
 
 # Dodane ręcznie
 experiments/results/
+
+# MikTex compilation
+report/*.aux
+report/*.fdb_latexmk
+report/*.fls
+report/*.log
+report/*.synctex.gz
