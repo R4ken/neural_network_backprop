@@ -163,6 +163,7 @@ class MLP:
             - ``"loss"``: Average training loss per epoch.
             - ``"iteration_loss"``: Loss evaluated at each mini-batch step.
             - ``"weight_norms"``: List of Frobenius norms for each Dense layer per epoch.
+            - ``"weight_update_norms"``: List of Frobenius norms of weight changes (W_t - W_{t-1}) for each Dense layer per epoch.
             - ``"tracked_neuron_weights"``: :class:`NeuronTrajectory` containing first neuron parameters per layer per epoch.
             - ``"val_loss"``: Validation loss per epoch (if validation_data provided).
             - ``"<metric_name>"``: Metric value on training data per epoch (if metrics provided).
@@ -172,6 +173,7 @@ class MLP:
             "loss": [],
             "iteration_loss": [],
             "weight_norms": [],
+            "weight_update_norms": [],
             "tracked_neuron_weights": [],
         }
         if validation_data is not None:
@@ -182,6 +184,9 @@ class MLP:
                 history[name] = []
                 if validation_data is not None:
                     history[f"val_{name}"] = []
+
+        dense_layers = [layer for layer in self.layers if isinstance(layer, Dense)]
+        prev_weights = [layer.W.copy() for layer in dense_layers]
 
         for epoch in range(1, epochs + 1):
             epoch_loss_sum = 0.0
@@ -206,6 +211,13 @@ class MLP:
                 if isinstance(layer, Dense)
             ]
             history["weight_norms"].append(epoch_norms)
+
+            epoch_update_norms = [
+                float(np.linalg.norm(layer.W - prev_w))
+                for layer, prev_w in zip(dense_layers, prev_weights)
+            ]
+            history["weight_update_norms"].append(epoch_update_norms)
+            prev_weights = [layer.W.copy() for layer in dense_layers]
 
             epoch_neuron_weights = [
                 weights

@@ -32,6 +32,10 @@ from experiments.common.plotting import (
     plot_architecture_accuracy_bars,
     plot_decision_boundaries_grid,
     plot_deep_model_weight_norms,
+    plot_k3_accuracy_curves,
+    plot_k3_loss_curves_split,
+    plot_k3_neuron_weights_grid_2x3,
+    plot_k3_weight_update_dynamics,
     plot_learning_curves_with_std,
     plot_multimodel_learning_curves_with_std,
     plot_neuron_weights_comparison_1x3,
@@ -40,6 +44,7 @@ from experiments.common.plotting import (
 )
 from src.py_nn1 import (
     MLP,
+    MSELoss,
     SGD,
     BinaryCrossEntropyLoss,
     CategoricalCrossEntropyLoss,
@@ -605,9 +610,260 @@ def run_experiment_k2(
     print("=" * 70)
 
 
-def run_experiment_k3() -> None:
-    """Placeholder for Experiment K3: Impact of loss functions (Cross-Entropy vs MSE)."""
-    print("Eksperyment K3 nie jest jeszcze zaimplementowany.")
+def run_experiment_k3(
+    seeds: list[int] | None = None,
+    n_samples: int = 100,
+    epochs: int = 150,
+    learning_rates: list[float] | None = None,
+) -> None:
+    """Runs Experiment K3: Impact of loss functions (Cross-Entropy vs MSE).
+
+    Compares Cross-Entropy (Binary/Categorical) against Mean Squared Error (MSE)
+    across multiple learning rates (e.g. 0.01, 0.05, 0.2) on binary and multiclass tasks.
+    Produces 5 specialized visualization artifacts adhering to project standards.
+
+    Args:
+        seeds: Random seeds for statistical evaluation. Defaults to [42, 123, 999].
+        n_samples: Number of samples in dataset. Defaults to 100.
+        epochs: Number of training epochs. Defaults to 150.
+        learning_rates: List of learning rates to evaluate. Defaults to [0.01, 0.05, 0.2].
+    """
+    if seeds is None:
+        seeds = [42, 123, 999]
+    if learning_rates is None:
+        learning_rates = [0.01, 0.05, 0.2]
+
+    results_dir = _get_results_dir()
+    print("=" * 70)
+    print("EKSPERYMENT K3: Wplyw miary bledu na wyjsciu sieci (Cross-Entropy vs MSE)")
+    print(f"Badane wskazniki uczenia: {learning_rates} | Ziarna losowe: {seeds} | Epoki: {epochs}")
+    print("=" * 70)
+
+    dataset_configs = [
+        {
+            "name": "simple",
+            "is_binary": True,
+            "output_dim": 1,
+            "output_act": Sigmoid,
+            "ce_loss_cls": BinaryCrossEntropyLoss,
+            "acc_metric": compute_multilabel_accuracy,
+        },
+        {
+            "name": "three_gauss",
+            "is_binary": False,
+            "output_dim": 3,
+            "output_act": Softmax,
+            "ce_loss_cls": CategoricalCrossEntropyLoss,
+            "acc_metric": compute_multiclass_accuracy,
+        },
+    ]
+
+    summary_rows: list[dict[str, Any]] = []
+
+    for ds_conf in dataset_configs:
+        ds_name = ds_conf["name"]
+        is_binary = ds_conf["is_binary"]
+        output_dim = ds_conf["output_dim"]
+        output_act = ds_conf["output_act"]
+        ce_loss_cls = ds_conf["ce_loss_cls"]
+        acc_metric = ds_conf["acc_metric"]
+
+        print(f"\n--> Przetwarzanie zbioru: {ds_name} (N = {n_samples})...")
+        dataset: ClassificationDataset = load_classification_data(ds_name, n_samples=n_samples)
+
+        layer_dims = [2, 32, 16, output_dim]
+
+        # Containers for plots
+        rep_models: dict[str, MLP] = {}
+
+        acc_by_lr: dict[float, dict[str, dict[str, list[list[float]]]]] = {
+            lr: {
+                "Cross-Entropy": {"train": [], "test": []},
+                "MSE": {"train": [], "test": []},
+            }
+            for lr in learning_rates
+        }
+
+        loss_by_fn: dict[str, dict[float, dict[str, list[list[float]]]]] = {
+            "Cross-Entropy": {lr: {"train": [], "test": []} for lr in learning_rates},
+            "MSE": {lr: {"train": [], "test": []} for lr in learning_rates},
+        }
+
+        updates_by_lr: dict[float, dict[str, list[list[float]]]] = {
+            lr: {"Cross-Entropy": [], "MSE": []} for lr in learning_rates
+        }
+
+        rep_neuron_trajectories_grid: dict[str, dict[float, NeuronTrajectory]] = {
+            "Cross-Entropy": {},
+            "MSE": {},
+        }
+
+        loss_configs = [
+            ("Cross-Entropy", ce_loss_cls),
+            ("MSE", MSELoss),
+        ]
+
+        for loss_name, loss_cls in loss_configs:
+            for lr in learning_rates:
+                final_tr_accs: list[float] = []
+                final_te_accs: list[float] = []
+                final_tr_losses: list[float] = []
+                final_te_losses: list[float] = []
+
+                for seed in seeds:
+                    set_seed(seed)
+                    model = MLP.from_dimensions(
+                        layer_dims=layer_dims,
+                        hidden_activation=ReLU,
+                        output_activation=output_act,
+                        use_bias=True,
+                        weight_init="he",
+                    )
+                    optimizer = SGD(learning_rate=lr)
+                    loss_fn = loss_cls()
+
+                    history = model.fit(
+                        x_train=dataset.x_train,
+                        y_train=dataset.y_train,
+                        loss_fn=loss_fn,
+                        optimizer=optimizer,
+                        epochs=epochs,
+                        batch_size=32,
+                        validation_data=(dataset.x_test, dataset.y_test),
+                        metrics={"acc": acc_metric},
+                        verbose=False,
+                    )
+
+                    acc_by_lr[lr][loss_name]["train"].append(history["acc"])
+                    acc_by_lr[lr][loss_name]["test"].append(history["val_acc"])
+
+                    loss_by_fn[loss_name][lr]["train"].append(history["loss"])
+                    loss_by_fn[loss_name][lr]["test"].append(history["val_loss"])
+
+                    # Compute total Frobenius norm of weight updates per epoch: sqrt(sum(||Delta W_l||^2))
+                    total_updates = [
+                        float(np.sqrt(sum(u**2 for u in epoch_updates)))
+                        for epoch_updates in history["weight_update_norms"]
+                    ]
+                    updates_by_lr[lr][loss_name].append(total_updates)
+
+                    final_tr_accs.append(history["acc"][-1])
+                    final_te_accs.append(history["val_acc"][-1])
+                    final_tr_losses.append(history["loss"][-1])
+                    final_te_losses.append(history["val_loss"][-1])
+
+                    # Save representative seed (seeds[0] = 42)
+                    if seed == seeds[0]:
+                        model_label = f"{loss_name} (lr = {lr})"
+                        rep_models[model_label] = model
+                        rep_neuron_trajectories_grid[loss_name][lr] = history["tracked_neuron_weights"]
+
+                mean_te_acc = float(np.mean(final_te_accs))
+                std_te_acc = float(np.std(final_te_accs))
+                mean_tr_acc = float(np.mean(final_tr_accs))
+                std_tr_acc = float(np.std(final_tr_accs))
+                mean_te_loss = float(np.mean(final_te_losses))
+                std_te_loss = float(np.std(final_te_losses))
+                mean_tr_loss = float(np.mean(final_tr_losses))
+                std_tr_loss = float(np.std(final_tr_losses))
+
+                summary_rows.append({
+                    "dataset": ds_name,
+                    "loss_function": loss_name,
+                    "learning_rate": lr,
+                    "test_acc_mean": mean_te_acc,
+                    "test_acc_std": std_te_acc,
+                    "train_acc_mean": mean_tr_acc,
+                    "train_acc_std": std_tr_acc,
+                    "test_loss_mean": mean_te_loss,
+                    "test_loss_std": std_te_loss,
+                    "train_loss_mean": mean_tr_loss,
+                    "train_loss_std": std_tr_loss,
+                })
+
+                print(
+                    f"   * [{loss_name:<13} | lr={lr:<4}] Dokladnosc testowa: "
+                    f"{mean_te_acc * 100:6.2f}% (+/- {std_te_acc * 100:4.2f}%) | "
+                    f"Strata testowa: {mean_te_loss:.4f}"
+                )
+
+        epochs_range = np.arange(1, epochs + 1)
+
+        # Plot 1: Decision boundaries grid 2x3 (Row 0: CE, Row 1: MSE)
+        boundary_path = results_dir / f"k3_{ds_name}_decision_boundaries.png"
+        plot_decision_boundaries_grid(
+            models=rep_models,
+            dataset=dataset,
+            save_path=boundary_path,
+            is_binary=is_binary,
+            nrows=2,
+            ncols=3,
+            title=f"Granice decyzyjne w zależności od funkcji straty i lr: {ds_name} (Zbiór testowy, N = {len(dataset.x_test)})",
+        )
+        print(f"   [Wykres 1/5] Zapisano granice decyzyjne: {boundary_path.name}")
+
+        # Plot 2: Accuracy curves across learning rates (1x3 subplots)
+        acc_plot_path = results_dir / f"k3_{ds_name}_accuracy_curves.png"
+        plot_k3_accuracy_curves(
+            epochs=epochs_range,
+            acc_by_lr=acc_by_lr,
+            title=f"Dokładność klasyfikacji: Cross-Entropy vs MSE w zależności od lr: {ds_name} (Średnia z {len(seeds)} ziaren)",
+            save_path=acc_plot_path,
+        )
+        print(f"   [Wykres 2/5] Zapisano krzywe dokładności: {acc_plot_path.name}")
+
+        # Plot 3: Loss curves side-by-side with split scales
+        loss_plot_path = results_dir / f"k3_{ds_name}_loss_curves.png"
+        plot_k3_loss_curves_split(
+            epochs=epochs_range,
+            loss_by_fn=loss_by_fn,
+            title=f"Przebieg funkcji straty: Cross-Entropy vs MSE dla badanych lr: {ds_name} (Średnia z {len(seeds)} ziaren)",
+            save_path=loss_plot_path,
+        )
+        print(f"   [Wykres 3/5] Zapisano krzywe strat (rozdzielone skale): {loss_plot_path.name}")
+
+        # Plot 4: Weight update dynamics (||Delta W||) across epochs
+        dyn_plot_path = results_dir / f"k3_{ds_name}_weight_update_dynamics.png"
+        plot_k3_weight_update_dynamics(
+            epochs=epochs_range,
+            updates_by_lr=updates_by_lr,
+            title=f"Dynamika aktualizacji wag w kolejnych epokach (Cross-Entropy vs MSE): {ds_name}",
+            save_path=dyn_plot_path,
+        )
+        print(f"   [Wykres 4/5] Zapisano dynamikę aktualizacji wag: {dyn_plot_path.name}")
+
+        # Plot 5: Neuron trajectories 2x3 grid
+        neuron_plot_path = results_dir / f"k3_{ds_name}_neuron_weights_grid.png"
+        plot_k3_neuron_weights_grid_2x3(
+            epochs=epochs_range,
+            trajectories_grid=rep_neuron_trajectories_grid,
+            title=f"Ewolucja wagi i biasu pierwszego neuronu w warstwie 1 (siatka 2x3): {ds_name} (Ziarno: {seeds[0]})",
+            save_path=neuron_plot_path,
+        )
+        print(f"   [Wykres 5/5] Zapisano ewolucję neuronu (2x3): {neuron_plot_path.name}")
+
+    # Save summary metrics to CSV
+    csv_path = results_dir / "k3_summary_metrics.csv"
+    fieldnames = [
+        "dataset",
+        "loss_function",
+        "learning_rate",
+        "test_acc_mean",
+        "test_acc_std",
+        "train_acc_mean",
+        "train_acc_std",
+        "test_loss_mean",
+        "test_loss_std",
+        "train_loss_mean",
+        "train_loss_std",
+    ]
+    with open(csv_path, mode="w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(summary_rows)
+
+    print(f"\n[Podsumowanie K3] Zapisano tabelę metryk: {csv_path.name}")
+    print("=" * 70)
 
 
 def main() -> None:
@@ -637,6 +893,12 @@ def main() -> None:
         help="Liczba epok treningu dla K2 (domyślnie: 250)",
     )
     parser.add_argument(
+        "--k3-epochs",
+        type=int,
+        default=150,
+        help="Liczba epok treningu dla K3 (domyślnie: 150)",
+    )
+    parser.add_argument(
         "--lr",
         type=float,
         default=0.01,
@@ -650,11 +912,11 @@ def main() -> None:
     elif args.experiment == "2":
         run_experiment_k2(n_samples=args.n_samples, epochs=args.epochs, lr=args.lr)
     elif args.experiment == "3":
-        run_experiment_k3()
+        run_experiment_k3(n_samples=args.n_samples, epochs=args.k3_epochs)
     elif args.experiment == "all":
         run_experiment_k1(n_samples=args.n_samples)
         run_experiment_k2(n_samples=args.n_samples, epochs=args.epochs, lr=args.lr)
-        run_experiment_k3()
+        run_experiment_k3(n_samples=args.n_samples, epochs=args.k3_epochs)
 
 
 if __name__ == "__main__":

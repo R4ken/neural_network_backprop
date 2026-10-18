@@ -624,6 +624,293 @@ def plot_neuron_weights_comparison_1x3(
     return target_path
 
 
+def plot_k3_accuracy_curves(
+    epochs: list[int] | np.ndarray,
+    acc_by_lr: dict[float, dict[str, dict[str, list[list[float]]]]],
+    title: str,
+    save_path: Path | str,
+) -> Path:
+    """Plots classification accuracy curves comparing Cross-Entropy and MSE across learning rates.
+
+    Creates a 1x3 subplot grid where each panel corresponds to one learning rate,
+    displaying training and test accuracy with std dev bands.
+
+    Args:
+        epochs: Sequence of epoch indices (1 to E).
+        acc_by_lr: Dict of {lr: {loss_fn_name: {"train": [runs], "test": [runs]}}}.
+        title: Main figure title in Polish.
+        save_path: Destination file path.
+
+    Returns:
+        Path to the saved figure.
+    """
+    target_path = Path(save_path)
+    target_path.parent.mkdir(parents=True, exist_ok=True)
+
+    lr_values = sorted(acc_by_lr.keys())
+    ncols = len(lr_values)
+    fig, axes = plt.subplots(1, ncols, figsize=(5.6 * ncols, 4.8), sharey=True)
+    if ncols == 1:
+        axes = [axes]
+
+    colors = {"Cross-Entropy": "#1f77b4", "MSE": "#d62728"}
+
+    for ax, lr in zip(axes, lr_values):
+        fn_data = acc_by_lr[lr]
+        for fn_name, splits in fn_data.items():
+            c = colors.get(fn_name, "#333333")
+
+            te_runs = np.array(splits["test"], dtype=float) * 100.0
+            te_mean = np.mean(te_runs, axis=0)
+            te_std = np.std(te_runs, axis=0)
+
+            tr_runs = np.array(splits["train"], dtype=float) * 100.0
+            tr_mean = np.mean(tr_runs, axis=0)
+
+            ax.plot(epochs, te_mean, label=f"{fn_name} (Test)", color=c, linewidth=2.0)
+            ax.fill_between(
+                epochs,
+                te_mean - te_std,
+                te_mean + te_std,
+                color=c,
+                alpha=0.18,
+            )
+            ax.plot(
+                epochs,
+                tr_mean,
+                label=f"{fn_name} (Trening)",
+                color=c,
+                linestyle="--",
+                linewidth=1.4,
+                alpha=0.75,
+            )
+
+        ax.set_title(f"Współczynnik uczenia lr = {lr}", fontsize=11.5, fontweight="bold")
+        ax.set_xlabel("Epoka", fontsize=10.5)
+        ax.set_ylabel("Dokładność (Accuracy) [%]", fontsize=10.5)
+        ax.grid(True, linestyle="--", alpha=0.5)
+        ax.set_ylim(-2, 102)
+        ax.legend(loc="lower right", fontsize=9.0)
+
+    fig.suptitle(title, fontsize=13, fontweight="bold")
+    fig.tight_layout()
+    fig.savefig(target_path, dpi=150, bbox_inches="tight")
+    plt.close(fig)
+    return target_path
+
+
+def plot_k3_loss_curves_split(
+    epochs: list[int] | np.ndarray,
+    loss_by_fn: dict[str, dict[float, dict[str, list[list[float]]]]],
+    title: str,
+    save_path: Path | str,
+) -> Path:
+    """Plots training and test loss curves in a 1x2 panel layout with split scales for CE and MSE.
+
+    Args:
+        epochs: Sequence of epoch indices (1 to E).
+        loss_by_fn: Dict of {loss_fn_name: {lr: {"train": [runs], "test": [runs]}}}.
+        title: Main figure title in Polish.
+        save_path: Destination file path.
+
+    Returns:
+        Path to the saved figure.
+    """
+    target_path = Path(save_path)
+    target_path.parent.mkdir(parents=True, exist_ok=True)
+
+    fig, (ax_ce, ax_mse) = plt.subplots(1, 2, figsize=(13, 5))
+
+    fn_axes = [
+        ("Cross-Entropy", ax_ce, "Funkcja straty (Entropia Krzyżowa)"),
+        ("MSE", ax_mse, "Funkcja straty (Błąd Średniokwadratowy - MSE)"),
+    ]
+
+    palette = ["#1f77b4", "#ff7f0e", "#2ca02c", "#9467bd"]
+
+    for fn_name, ax, y_label in fn_axes:
+        lr_data = loss_by_fn.get(fn_name, {})
+        for idx, (lr, splits) in enumerate(sorted(lr_data.items())):
+            color = palette[idx % len(palette)]
+            te_runs = np.array(splits["test"], dtype=float)
+            te_mean = np.mean(te_runs, axis=0)
+            te_std = np.std(te_runs, axis=0)
+
+            tr_runs = np.array(splits["train"], dtype=float)
+            tr_mean = np.mean(tr_runs, axis=0)
+
+            ax.plot(epochs, te_mean, label=f"lr = {lr} (Test)", color=color, linewidth=2.0)
+            ax.fill_between(
+                epochs,
+                te_mean - te_std,
+                te_mean + te_std,
+                color=color,
+                alpha=0.18,
+            )
+            ax.plot(
+                epochs,
+                tr_mean,
+                label=f"lr = {lr} (Trening)",
+                color=color,
+                linestyle="--",
+                linewidth=1.3,
+                alpha=0.7,
+            )
+
+        ax.set_title(f"Optymalizacja: {fn_name}", fontsize=12, fontweight="bold")
+        ax.set_xlabel("Epoka", fontsize=11)
+        ax.set_ylabel(y_label, fontsize=11)
+        ax.grid(True, linestyle="--", alpha=0.5)
+        ax.legend(loc="upper right", fontsize=9.0)
+
+    fig.suptitle(title, fontsize=13, fontweight="bold")
+    fig.tight_layout()
+    fig.savefig(target_path, dpi=150, bbox_inches="tight")
+    plt.close(fig)
+    return target_path
+
+
+def plot_k3_weight_update_dynamics(
+    epochs: list[int] | np.ndarray,
+    updates_by_lr: dict[float, dict[str, list[list[float]]]],
+    title: str,
+    save_path: Path | str,
+) -> Path:
+    """Plots weight update Frobenius norms ||Delta W|| across epochs comparing CE and MSE.
+
+    Layout: 1x3 subplots for the tested learning rates.
+
+    Args:
+        epochs: Sequence of epoch indices (1 to E).
+        updates_by_lr: Dict of {lr: {loss_fn_name: [runs_of_total_norm_per_epoch]}}.
+        title: Main figure title in Polish.
+        save_path: Destination file path.
+
+    Returns:
+        Path to the saved figure.
+    """
+    target_path = Path(save_path)
+    target_path.parent.mkdir(parents=True, exist_ok=True)
+
+    lr_values = sorted(updates_by_lr.keys())
+    ncols = len(lr_values)
+    fig, axes = plt.subplots(1, ncols, figsize=(5.6 * ncols, 4.8), sharey=True)
+    if ncols == 1:
+        axes = [axes]
+
+    colors = {"Cross-Entropy": "#1f77b4", "MSE": "#d62728"}
+
+    for ax, lr in zip(axes, lr_values):
+        fn_data = updates_by_lr[lr]
+        for fn_name, runs in fn_data.items():
+            c = colors.get(fn_name, "#333333")
+            arr = np.array(runs, dtype=float)
+            mean_vals = np.mean(arr, axis=0)
+            std_vals = np.std(arr, axis=0)
+
+            ax.plot(epochs, mean_vals, label=fn_name, color=c, linewidth=2.0)
+            ax.fill_between(
+                epochs,
+                mean_vals - std_vals,
+                mean_vals + std_vals,
+                color=c,
+                alpha=0.18,
+            )
+
+        ax.set_title(f"Współczynnik uczenia lr = {lr}", fontsize=11.5, fontweight="bold")
+        ax.set_xlabel("Epoka", fontsize=10.5)
+        ax.set_ylabel(r"Norma skoku wag $\|\Delta W\|_F$", fontsize=10.5)
+        ax.grid(True, linestyle="--", alpha=0.5)
+        ax.legend(title="Funkcja straty", loc="upper right", fontsize=9.5)
+
+    fig.suptitle(title, fontsize=13, fontweight="bold")
+    fig.tight_layout()
+    fig.savefig(target_path, dpi=150, bbox_inches="tight")
+    plt.close(fig)
+    return target_path
+
+
+def plot_k3_neuron_weights_grid_2x3(
+    epochs: list[int] | np.ndarray,
+    trajectories_grid: dict[str, dict[float, NeuronTrajectory]],
+    title: str,
+    save_path: Path | str,
+) -> Path:
+    """Plots w_0,0 and b_0 of the first hidden layer on a 2x3 grid (Loss function x Learning rate).
+
+    Rows: Cross-Entropy, MSE.
+    Columns: Tested learning rate values.
+
+    Args:
+        epochs: Sequence of epoch numbers (1 to E).
+        trajectories_grid: Dict mapping loss_fn -> {lr: trajectory_for_representative_seed}.
+        title: Main figure title in Polish.
+        save_path: Destination file path.
+
+    Returns:
+        Path to the saved figure.
+    """
+    target_path = Path(save_path)
+    target_path.parent.mkdir(parents=True, exist_ok=True)
+
+    loss_names = ["Cross-Entropy", "MSE"]
+    # Get sorted lr values from first loss entry
+    first_loss = next(iter(trajectories_grid.keys()))
+    lr_values = sorted(trajectories_grid[first_loss].keys())
+
+    nrows = len(loss_names)
+    ncols = len(lr_values)
+
+    fig, axes = plt.subplots(
+        nrows,
+        ncols,
+        figsize=(5.2 * ncols, 4.4 * nrows),
+        sharex=True,
+    )
+
+    weight_color = "#1f77b4"
+    bias_color = "#d62728"
+
+    for r_idx, loss_name in enumerate(loss_names):
+        for c_idx, lr in enumerate(lr_values):
+            ax = axes[r_idx, c_idx]
+            trajectory = trajectories_grid.get(loss_name, {}).get(lr, [])
+
+            if trajectory:
+                w_vals = [epoch_layers[0].get("w", 0.0) for epoch_layers in trajectory]
+                b_vals = [epoch_layers[0].get("b", 0.0) for epoch_layers in trajectory]
+
+                ax.plot(
+                    epochs,
+                    w_vals,
+                    label=r"Waga $w_{0,0}$",
+                    color=weight_color,
+                    linestyle="-",
+                    linewidth=2.0,
+                )
+                ax.plot(
+                    epochs,
+                    b_vals,
+                    label=r"Bias $b_0$",
+                    color=bias_color,
+                    linestyle="--",
+                    linewidth=1.8,
+                )
+
+            ax.set_title(f"{loss_name} | lr = {lr}", fontsize=11, fontweight="bold")
+            ax.set_xlabel("Epoka", fontsize=10)
+            ax.set_ylabel("Wartość parametru", fontsize=10)
+            ax.grid(True, linestyle="--", alpha=0.5)
+            ax.legend(loc="best", fontsize=9.0)
+
+    fig.suptitle(title, fontsize=13, fontweight="bold")
+    fig.tight_layout()
+    fig.savefig(target_path, dpi=150, bbox_inches="tight")
+    plt.close(fig)
+    return target_path
+
+
+
 if __name__ == "__main__":
     import sys
     if hasattr(sys.stdout, "reconfigure"):
