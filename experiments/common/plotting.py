@@ -187,15 +187,19 @@ def plot_regression_approximations_grid(
     grid_points: int = 500,
     point_size: float = 14.0,
     alpha: float = 0.5,
+    nrows: int = 1,
+    ncols: int | None = None,
+    title: str | None = None,
 ) -> Path:
-    """Plots 1D regression approximations for multiple models side-by-side (1xN grid).
+    """Plots 1D regression approximations for multiple models in a subplot grid.
 
     The model curve is evaluated on a dense, sorted grid spanning the domain of
     the selected split. For ``split="test"`` two vertical dashed lines mark the
     training-domain boundaries, so extrapolation is visually explicit.
 
     Args:
-        models: Dictionary mapping activation name to a trained model instance.
+        models: Dictionary mapping a model label (activation, architecture,
+            loss/lr combination, sample size) to a trained model instance.
         dataset: RegressionDataset instance.
         save_path: Destination path for the saved image.
         split: Split used for the scatter points and the evaluation domain.
@@ -203,6 +207,10 @@ def plot_regression_approximations_grid(
         grid_points: Number of points in the dense evaluation grid.
         point_size: Scatter point size for the data samples.
         alpha: Alpha transparency for the data points.
+        nrows: Number of rows in the subplot grid.
+        ncols: Number of columns. If None, computed from the number of models.
+        title: Optional main figure title in Polish. If None, a standard title
+            is generated.
 
     Returns:
         Path to the saved figure.
@@ -214,9 +222,18 @@ def plot_regression_approximations_grid(
     target_path.parent.mkdir(parents=True, exist_ok=True)
 
     n_models = len(models)
-    fig, axes = plt.subplots(1, n_models, figsize=(5.3 * n_models, 4.8))
-    if n_models == 1:
-        axes = [axes]
+    if ncols is None:
+        ncols = (n_models + nrows - 1) // nrows
+
+    fig, axes = plt.subplots(
+        nrows,
+        ncols,
+        figsize=(5.3 * ncols, 4.8 * nrows),
+    )
+    if isinstance(axes, np.ndarray):
+        axes_list = list(axes.flatten())
+    else:
+        axes_list = [axes]
 
     if split == "train":
         x_points, y_points = dataset.x_train, dataset.y_train
@@ -235,10 +252,11 @@ def plot_regression_approximations_grid(
     train_max = float(np.max(dataset.x_train))
 
     palette = {"Sigmoid": "#1f77b4", "Tanh": "#2ca02c", "ReLU": "#d62728"}
+    panel_title_fontsize = 12.0 if n_models <= 3 else (10.5 if n_models <= 6 else 9.5)
 
-    for ax, (act_name, model) in zip(axes, models.items()):
+    for ax, (model_name, model) in zip(axes_list, models.items()):
         y_grid = np.asarray(model.predict(x_grid)).ravel()
-        color = palette.get(act_name, None)
+        color = palette.get(model_name, None)
 
         ax.scatter(
             x_points[:, 0],
@@ -255,7 +273,7 @@ def plot_regression_approximations_grid(
             y_grid,
             color=color,
             linewidth=2.2,
-            label=f"Aproksymacja ({act_name})",
+            label=f"Aproksymacja ({model_name})",
             zorder=2,
         )
 
@@ -270,18 +288,29 @@ def plot_regression_approximations_grid(
             )
             ax.axvline(train_max, color="black", linestyle="--", linewidth=1.4, zorder=0)
 
-        ax.set_title(f"Aktywacja: {act_name}", fontsize=12, fontweight="bold")
+        panel_title = (
+            f"Aktywacja: {model_name}"
+            if model_name in ("Sigmoid", "Tanh", "ReLU")
+            else model_name
+        )
+        ax.set_title(
+            panel_title,
+            fontsize=panel_title_fontsize,
+            fontweight="bold",
+        )
         ax.set_xlabel("Wejście $x$", fontsize=11)
         ax.set_ylabel(r"Wyjście modelu $\hat{y}$", fontsize=11)
         ax.grid(True, linestyle="--", alpha=0.5)
         ax.legend(loc="best", fontsize=8.5)
 
-    seed_suffix = f" (Ziarno: {seed})" if seed is not None else ""
-    fig.suptitle(
-        f"Aproksymacja funkcji jednoargumentowej: {dataset.name} – {split_title}{seed_suffix}",
-        fontsize=14,
-        fontweight="bold",
-    )
+    if title is None:
+        seed_suffix = f" (Ziarno: {seed})" if seed is not None else ""
+        title = (
+            f"Aproksymacja funkcji jednoargumentowej: {dataset.name} – "
+            f"{split_title}{seed_suffix}"
+        )
+
+    fig.suptitle(title, fontsize=14, fontweight="bold")
     fig.tight_layout()
     fig.savefig(target_path, dpi=150, bbox_inches="tight")
     plt.close(fig)
@@ -466,16 +495,18 @@ def plot_weight_norms_with_std(
     layer_names: list[str],
     title: str,
     save_path: Path | str,
+    legend_title: str = "Funkcja aktywacji",
 ) -> Path:
     """Plots weight norms for each layer across epochs with std dev bands across seeds.
 
     Args:
         epochs: Sequence of epoch numbers (1 to E).
-        norms_by_act: Dict of {act_name: [seed_runs]}, where each seed_run is
+        norms_by_act: Dict of {model_label: [seed_runs]}, where each seed_run is
             list of epochs, and each epoch is list of norms per Dense layer.
         layer_names: Descriptive Polish names for each Dense layer.
         title: Main title of the figure (in Polish).
         save_path: Destination path for the saved image.
+        legend_title: Title of the legend (in Polish).
 
     Returns:
         Path to the saved figure.
@@ -511,13 +542,15 @@ def plot_weight_norms_with_std(
         ax.set_xlabel("Epoka", fontsize=11)
         ax.set_ylabel(r"Norma Frobeniusa $\|W\|_F$", fontsize=11)
         ax.grid(True, linestyle="--", alpha=0.5)
-        ax.legend(title="Funkcja aktywacji", loc="best", fontsize=10)
+        ax.legend(title=legend_title, loc="best", fontsize=10)
 
     fig.suptitle(title, fontsize=14, fontweight="bold")
     fig.tight_layout()
     fig.savefig(target_path, dpi=150, bbox_inches="tight")
     plt.close(fig)
-    
+    return target_path
+
+
 def plot_neuron_weights_trajectory(
     epochs: list[int] | np.ndarray,
     trajectories_by_act: dict[str, NeuronTrajectory],
@@ -653,6 +686,70 @@ def plot_architecture_accuracy_bars(
     return target_path
 
 
+def plot_architecture_regression_bars(
+    arch_labels: list[str],
+    train_values: list[float],
+    train_stds: list[float],
+    test_values: list[float],
+    test_stds: list[float],
+    title: str,
+    save_path: Path | str,
+    metric_label: str = "Błąd średniokwadratowy (MSE)",
+) -> Path:
+    """Plots final regression error across architectures on separate train/test panels.
+
+    Each panel has its own Y-axis because regression test errors (extrapolation)
+    are often orders of magnitude larger than training errors.
+
+    Args:
+        arch_labels: Labels representing each tested architecture.
+        train_values: Mean final training error for each architecture.
+        train_stds: Standard deviation of the training error across seeds.
+        test_values: Mean final test error for each architecture.
+        test_stds: Standard deviation of the test error across seeds.
+        title: Figure title (in Polish).
+        save_path: Destination file path.
+        metric_label: Y-axis label in Polish.
+
+    Returns:
+        Path to the saved figure.
+    """
+    target_path = Path(save_path)
+    target_path.parent.mkdir(parents=True, exist_ok=True)
+
+    fig, (ax_train, ax_test) = plt.subplots(1, 2, figsize=(14, 5.8), sharey=False)
+    x = np.arange(len(arch_labels))
+    width = 0.62
+
+    panels = [
+        (ax_train, train_values, train_stds, "Zbiór uczący", "#1f77b4"),
+        (ax_test, test_values, test_stds, "Zbiór testowy", "#ff7f0e"),
+    ]
+
+    for ax, values, stds, panel_title, color in panels:
+        ax.bar(
+            x,
+            values,
+            width,
+            yerr=stds,
+            color=color,
+            capsize=4,
+            alpha=0.85,
+        )
+        ax.set_title(panel_title, fontsize=12, fontweight="bold")
+        ax.set_xlabel("Badana architektura sieci", fontsize=11)
+        ax.set_ylabel(metric_label, fontsize=11)
+        ax.set_xticks(x)
+        ax.set_xticklabels(arch_labels, rotation=24, ha="right", fontsize=8.5)
+        ax.grid(True, linestyle="--", alpha=0.5, axis="y")
+
+    fig.suptitle(title, fontsize=13, fontweight="bold")
+    fig.tight_layout()
+    fig.savefig(target_path, dpi=150, bbox_inches="tight")
+    plt.close(fig)
+    return target_path
+
+
 def plot_multimodel_learning_curves_with_std(
     epochs: list[int] | np.ndarray,
     results_by_model: dict[str, dict[str, list[list[float]]]],
@@ -660,6 +757,8 @@ def plot_multimodel_learning_curves_with_std(
     title: str,
     save_path: Path | str,
     as_percentage: bool = False,
+    sharey: bool = True,
+    legend_title: str = "Architektura",
 ) -> Path:
     """Plots training and test curves side-by-side with std dev bands across seeds for multiple models.
 
@@ -670,6 +769,8 @@ def plot_multimodel_learning_curves_with_std(
         title: Figure title in Polish.
         save_path: Destination file path.
         as_percentage: Whether to multiply values by 100 (e.g. for accuracy).
+        sharey: Whether train and test panels share the Y-axis scale. Defaults to True.
+        legend_title: Title of the legend (in Polish).
 
     Returns:
         Path to the saved figure.
@@ -677,7 +778,7 @@ def plot_multimodel_learning_curves_with_std(
     target_path = Path(save_path)
     target_path.parent.mkdir(parents=True, exist_ok=True)
 
-    fig, (ax_train, ax_test) = plt.subplots(1, 2, figsize=(15, 5.8), sharey=True)
+    fig, (ax_train, ax_test) = plt.subplots(1, 2, figsize=(15, 5.8), sharey=sharey)
     colormap = plt.cm.tab10.colors
 
     splits = [
@@ -707,7 +808,7 @@ def plot_multimodel_learning_curves_with_std(
         ax.set_xlabel("Epoka", fontsize=11)
         ax.set_ylabel(metric_label, fontsize=11)
         ax.grid(True, linestyle="--", alpha=0.5)
-        ax.legend(title="Architektura", loc="best", fontsize=8.5)
+        ax.legend(title=legend_title, loc="best", fontsize=8.5)
 
     fig.suptitle(title, fontsize=13, fontweight="bold")
     fig.tight_layout()
@@ -991,7 +1092,7 @@ def plot_k3_weight_update_dynamics(
     if ncols == 1:
         axes = [axes]
 
-    colors = {"Cross-Entropy": "#1f77b4", "MSE": "#d62728"}
+    colors = {"Cross-Entropy": "#1f77b4", "MSE": "#d62728", "MAE": "#ff7f0e"}
 
     for ax, lr in zip(axes, lr_values):
         fn_data = updates_by_lr[lr]
@@ -1028,10 +1129,11 @@ def plot_k3_neuron_weights_grid_2x3(
     trajectories_grid: dict[str, dict[float, NeuronTrajectory]],
     title: str,
     save_path: Path | str,
+    loss_names: list[str] | None = None,
 ) -> Path:
-    """Plots w_0,0 and b_0 of the first hidden layer on a 2x3 grid (Loss function x Learning rate).
+    """Plots w_0,0 and b_0 of the first hidden layer on a grid (Loss function x Learning rate).
 
-    Rows: Cross-Entropy, MSE.
+    Rows: loss functions (e.g. Cross-Entropy/MSE or MSE/MAE).
     Columns: Tested learning rate values.
 
     Args:
@@ -1039,6 +1141,8 @@ def plot_k3_neuron_weights_grid_2x3(
         trajectories_grid: Dict mapping loss_fn -> {lr: trajectory_for_representative_seed}.
         title: Main figure title in Polish.
         save_path: Destination file path.
+        loss_names: Ordered loss-function labels to show as rows. If None,
+            ``["Cross-Entropy", "MSE"]`` is used.
 
     Returns:
         Path to the saved figure.
@@ -1046,7 +1150,8 @@ def plot_k3_neuron_weights_grid_2x3(
     target_path = Path(save_path)
     target_path.parent.mkdir(parents=True, exist_ok=True)
 
-    loss_names = ["Cross-Entropy", "MSE"]
+    if loss_names is None:
+        loss_names = ["Cross-Entropy", "MSE"]
     # Get sorted lr values from first loss entry
     first_loss = next(iter(trajectories_grid.keys()))
     lr_values = sorted(trajectories_grid[first_loss].keys())
@@ -1102,6 +1207,250 @@ def plot_k3_neuron_weights_grid_2x3(
     plt.close(fig)
     return target_path
 
+
+
+def plot_r3_metric_curves(
+    epochs: list[int] | np.ndarray,
+    metric_by_lr: dict[float, dict[str, dict[str, list[list[float]]]]],
+    metric_label: str,
+    title: str,
+    save_path: Path | str,
+) -> Path:
+    """Plots a shared regression metric for MSE vs MAE optimization across lr values.
+
+    Layout: 2 x len(lr) grid. Rows are the training and test splits, columns are
+    the tested learning rates.
+
+    Args:
+        epochs: Sequence of epoch indices (1 to E).
+        metric_by_lr: Dict of {lr: {loss_fn_name: {"train": [runs], "test": [runs]}}}.
+        metric_label: Y-axis label in Polish.
+        title: Main figure title in Polish.
+        save_path: Destination file path.
+
+    Returns:
+        Path to the saved figure.
+    """
+    target_path = Path(save_path)
+    target_path.parent.mkdir(parents=True, exist_ok=True)
+
+    lr_values = sorted(metric_by_lr.keys())
+    ncols = len(lr_values)
+    fig, axes = plt.subplots(
+        2,
+        ncols,
+        figsize=(5.6 * ncols, 9.2),
+        sharex=True,
+        sharey=False,
+    )
+    if ncols == 1:
+        axes = np.asarray(axes).reshape(2, 1)
+
+    colors = {"MSE": "#1f77b4", "MAE": "#ff7f0e"}
+    splits = [
+        (0, "train", "Zbiór uczący"),
+        (1, "test", "Zbiór testowy"),
+    ]
+
+    for row_idx, split_key, split_title in splits:
+        for col_idx, lr in enumerate(lr_values):
+            ax = axes[row_idx, col_idx]
+            fn_data = metric_by_lr[lr]
+            for fn_name, data in fn_data.items():
+                color = colors.get(fn_name, "#333333")
+                runs = np.array(data[split_key], dtype=float)
+                mean_vals = np.mean(runs, axis=0)
+                std_vals = np.std(runs, axis=0)
+
+                ax.plot(epochs, mean_vals, label=fn_name, color=color, linewidth=2.0)
+                ax.fill_between(
+                    epochs,
+                    mean_vals - std_vals,
+                    mean_vals + std_vals,
+                    color=color,
+                    alpha=0.18,
+                )
+
+            ax.set_title(
+                f"{split_title} | lr = {lr}",
+                fontsize=10.5,
+                fontweight="bold",
+            )
+            ax.set_xlabel("Epoka", fontsize=10.5)
+            if col_idx == 0:
+                ax.set_ylabel(metric_label, fontsize=10.5)
+            ax.grid(True, linestyle="--", alpha=0.5)
+
+            if col_idx == 0:
+                ax.legend(title="Funkcja straty", loc="best", fontsize=9.0)
+
+    fig.suptitle(title, fontsize=13, fontweight="bold")
+    fig.tight_layout()
+    fig.savefig(target_path, dpi=150, bbox_inches="tight")
+    plt.close(fig)
+    return target_path
+
+
+def plot_r3_loss_curves_split(
+    epochs: list[int] | np.ndarray,
+    loss_by_fn: dict[str, dict[float, dict[str, list[list[float]]]]],
+    title: str,
+    save_path: Path | str,
+) -> Path:
+    """Plots native loss curves for MSE vs MAE optimization on split panels.
+
+    Layout: 2 x 2 grid. Rows are the training and test splits, columns are the
+    optimized loss functions. Each panel compares the tested learning rates with
+    independent Y-axis scales because the native losses are not comparable.
+
+    Args:
+        epochs: Sequence of epoch indices (1 to E).
+        loss_by_fn: Dict of {loss_fn_name: {lr: {"train": [runs], "test": [runs]}}}.
+        title: Main figure title in Polish.
+        save_path: Destination file path.
+
+    Returns:
+        Path to the saved figure.
+    """
+    target_path = Path(save_path)
+    target_path.parent.mkdir(parents=True, exist_ok=True)
+
+    fn_names = list(loss_by_fn.keys())
+    ncols = len(fn_names)
+    fig, axes = plt.subplots(
+        2,
+        ncols,
+        figsize=(6.6 * ncols, 9.2),
+        sharex=True,
+        sharey=False,
+    )
+    if ncols == 1:
+        axes = np.asarray(axes).reshape(2, 1)
+
+    palette = ["#1f77b4", "#ff7f0e", "#2ca02c", "#9467bd", "#8c564b"]
+    splits = [
+        (0, "train", "Zbiór uczący"),
+        (1, "test", "Zbiór testowy"),
+    ]
+
+    for row_idx, split_key, split_title in splits:
+        for col_idx, fn_name in enumerate(fn_names):
+            ax = axes[row_idx, col_idx]
+            lr_data = loss_by_fn[fn_name]
+            for idx, (lr, data) in enumerate(sorted(lr_data.items())):
+                color = palette[idx % len(palette)]
+                runs = np.array(data[split_key], dtype=float)
+                mean_vals = np.mean(runs, axis=0)
+                std_vals = np.std(runs, axis=0)
+
+                ax.plot(
+                    epochs,
+                    mean_vals,
+                    label=f"lr = {lr}",
+                    color=color,
+                    linewidth=2.0,
+                )
+                ax.fill_between(
+                    epochs,
+                    mean_vals - std_vals,
+                    mean_vals + std_vals,
+                    color=color,
+                    alpha=0.18,
+                )
+
+            ax.set_title(
+                f"Optymalizacja: {fn_name} | {split_title}",
+                fontsize=10.5,
+                fontweight="bold",
+            )
+            ax.set_xlabel("Epoka", fontsize=10.5)
+            if col_idx == 0:
+                ax.set_ylabel(f"Funkcja straty ({fn_name})", fontsize=10.5)
+            ax.grid(True, linestyle="--", alpha=0.5)
+            ax.legend(title="Współczynnik uczenia", loc="best", fontsize=9.0)
+
+    fig.suptitle(title, fontsize=13, fontweight="bold")
+    fig.tight_layout()
+    fig.savefig(target_path, dpi=150, bbox_inches="tight")
+    plt.close(fig)
+    return target_path
+
+
+def plot_sample_size_generalization_curve(
+    sample_sizes: list[int],
+    train_means: list[float],
+    train_stds: list[float],
+    test_means: list[float],
+    test_stds: list[float],
+    title: str,
+    save_path: Path | str,
+    metric_label: str = "Błąd średniokwadratowy (MSE)",
+) -> Path:
+    """Plots final train and test error as a function of the training-set size N.
+
+    Layout: 1x2 (train vs test) with independent Y-axis scales, because test
+    errors on extrapolation splits can be orders of magnitude larger.
+
+    Args:
+        sample_sizes: Tested training-set sizes.
+        train_means: Mean final training error for each N.
+        train_stds: Standard deviation of the training error across seeds.
+        test_means: Mean final test error for each N.
+        test_stds: Standard deviation of the test error across seeds.
+        title: Main figure title in Polish.
+        save_path: Destination file path.
+        metric_label: Y-axis label in Polish.
+
+    Returns:
+        Path to the saved figure.
+    """
+    target_path = Path(save_path)
+    target_path.parent.mkdir(parents=True, exist_ok=True)
+
+    x = np.arange(len(sample_sizes))
+    x_labels = [str(n) for n in sample_sizes]
+
+    fig, (ax_train, ax_test) = plt.subplots(1, 2, figsize=(13, 5.2), sharey=False)
+
+    panels = [
+        (ax_train, train_means, train_stds, "Zbiór uczący", "#1f77b4"),
+        (ax_test, test_means, test_stds, "Zbiór testowy", "#ff7f0e"),
+    ]
+
+    for ax, means, stds, panel_title, color in panels:
+        means_arr = np.asarray(means, dtype=float)
+        stds_arr = np.asarray(stds, dtype=float)
+
+        ax.plot(
+            x,
+            means_arr,
+            color=color,
+            marker="o",
+            markersize=7,
+            linewidth=2.0,
+            label=panel_title,
+        )
+        ax.fill_between(
+            x,
+            means_arr - stds_arr,
+            means_arr + stds_arr,
+            color=color,
+            alpha=0.18,
+            label=r"Odchylenie standardowe $\pm 1\sigma$",
+        )
+        ax.set_title(panel_title, fontsize=12, fontweight="bold")
+        ax.set_xlabel("Rozmiar zbioru uczącego $N$", fontsize=11)
+        ax.set_ylabel(metric_label, fontsize=11)
+        ax.set_xticks(x)
+        ax.set_xticklabels(x_labels)
+        ax.grid(True, linestyle="--", alpha=0.5)
+        ax.legend(loc="best", fontsize=9.5)
+
+    fig.suptitle(title, fontsize=13, fontweight="bold")
+    fig.tight_layout()
+    fig.savefig(target_path, dpi=150, bbox_inches="tight")
+    plt.close(fig)
+    return target_path
 
 
 if __name__ == "__main__":

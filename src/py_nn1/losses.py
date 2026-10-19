@@ -64,6 +64,24 @@ class MSELoss(Loss):
         return 2.0 * (y_pred - y_true) / y_pred.size
 
 
+class MAELoss(Loss):
+    """Mean absolute error loss."""
+
+    def forward(self, y_pred: FloatArray, y_true: FloatArray) -> float:
+        """Computes the mean absolute error."""
+        check_matching_shapes(y_pred, y_true)
+        return float(np.mean(np.abs(y_pred - y_true)))
+
+    def backward(self, y_pred: FloatArray, y_true: FloatArray) -> FloatArray:
+        """Computes ``sign(y_pred - y_true) / N``.
+
+        ``sign(0)`` is defined as ``0`` by NumPy, which is a valid subgradient
+        of the absolute value at the origin.
+        """
+        check_matching_shapes(y_pred, y_true)
+        return np.sign(y_pred - y_true) / y_pred.size
+
+
 class BinaryCrossEntropyLoss(Loss):
     """Binary cross-entropy loss for two-class / multi-label problems."""
 

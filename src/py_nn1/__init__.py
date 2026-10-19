@@ -2,7 +2,13 @@ from __future__ import annotations
 
 from .activations import Activation, ReLU, Sigmoid, Softmax, Tanh
 from .layers import Dense, Layer, NeuronWeights
-from .losses import BinaryCrossEntropyLoss, CategoricalCrossEntropyLoss, Loss, MSELoss
+from .losses import (
+    BinaryCrossEntropyLoss,
+    CategoricalCrossEntropyLoss,
+    Loss,
+    MAELoss,
+    MSELoss,
+)
 from .mlp import MLP, EpochNeuronWeights, MetricFn, NeuronTrajectory
 from .optimizers import SGD, Optimizer
 from .utils import (
@@ -25,6 +31,7 @@ __all__ = [
     "EpochNeuronWeights",
     "Layer",
     "Loss",
+    "MAELoss",
     "MLP",
     "MSELoss",
     "MetricFn",
