@@ -137,19 +137,196 @@ oraz zmiany wartości kilku wybranych z góry wag sieci.
 % ==============================================================================
 \section{Eksperymenty — Zagadnienie klasyfikacji}
 
-\subsection{Zbiory danych i metodyka badawcza}
-% TODO: Opisz zbiory klasyfikacyjne w R^2 (data.simple, data.three_gauss).
-% - Dobór warstwy wyjściowej i kodowania etykiet (Sigmoid dla binarnej, Softmax dla wieloklasowej).
+\subsection{Zbiory danych}
+W tej części projektu, badano wykorzystanie modelu \texttt{MLP} do klasyfikacji punktów w przestzeni $\mathbb{R}^2$.
+Do zadania dostarczono dwa zbiory danych, każdy w kilku wersjach różniących się wielkością. Aby uwypuklić różnice między różnymi architekturami, skupiono
+się na rozmiarze $N = 100$.
 
-\subsection{Wpływ funkcji aktywacji w warstwach ukrytych}
-% TODO: Porównaj działanie badanych funkcji aktywacji (Sigmoid, Tanh, ReLU).
-% - Wnioski: kształt i geometria granic decyzyjnych w 2D, szybkość uczenia i dokładność (Accuracy).
+\begin{itemize}
+    \item \textbf{Zbiór \texttt{data.simple}} — klasyfikacja binarnej (2 klasy).
+    Skupiska klas rozdzielone są łagodną, ale nieliniową granicą (Rysunek \ref{fig:dataset_simple}).
+    W warstwie wyjściowej stosowano przeważnie pojedynczy neuron z funkcją aktywacji \texttt{Sigmoid} oraz binarną entropię krzyżową
+    (\texttt{BinaryCrossEntropyLoss}). Wyjątkiem jest \hyperref[sec:K3]{eksperyment 3} którego celem było porównanie entropii krzyżowej do
+    błędu średniokwadratowego (\texttt{MSE}).
+    \item \textbf{Zbiór \texttt{data.three\_gauss}} — klasyfikacja wieloklasowa (3 klasy). Skupiska powstały przez nałożenie na siebie
+    dwuwymiarowych rozkładów gaussowskich (Rysunek~\ref{fig:dataset_three_gauss}). Kluczową cechą tego zbioru jest wyraźne
+    nakładanie się rozkładów klas na środku przestrzeni. Ze względu na to przenikanie się klas, zbiór jest trudniejszy w klasyfikacji
+    przez co idealne rozpoznawanie klas nie jest możliwe bez przeuczenia.
+    Na wyjściu sieci stosowano 3 neurony z aktywacją \texttt{Softmax}, etykiety kodowane w postaci one-hot
+    oraz funkcję kategorycznej entropii krzyżowej (\texttt{CategoricalCrossEntropyLoss}). Wyjątkiem ponownie był
+    \hyperref[sec:K3]{eksperyment 3} w którym porównano entropię krzyżową z \texttt{MSE}.
+\end{itemize}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.92\textwidth]{../experiments/results/classification/dataset_simple_100.png}
+    \caption{Wizualizacja zbioru uczącego i testowego dla problemu binarnego \texttt{data.simple} ($N = 100$).}
+    \label{fig:dataset_simple}
+\end{figure}
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.92\textwidth]{../experiments/results/classification/dataset_three_gauss_100.png}
+    \caption{Zbiór uczący i testowy dla problemu wieloklasowego \texttt{data.three\_gauss} 
+    ($N = 100$ na klasę). Widoczne nakładanie się klas w centrum przestrzeni.}
+    \label{fig:dataset_three_gauss}
+\end{figure}
+
+\subsection{Eksperyment 1 - Wpływ funkcji aktywacji w warstwach ukrytych}
+\label{sec:K1}
+
+W ramach eksperymentu zbadano wpływ doboru funkcji aktywacji w warstwach ukrytych 
+(\texttt{Sigmoid}, \texttt{Tanh}, \texttt{ReLU}) na przebieg uczenia,
+stabilność wag oraz finalny przebieg granic decyzyjnych. 
+Eksperymenty przeprowadzono na jednej architekturze $[2, 32, 16, C]$ ($C=1$ dla klasyfikacji binarnej, $C=3$ dla wieloklasowej)
+przy użyciu optymalizatora \texttt{SGD} ($\eta = 0.05$, 150 epok) dla 3 różnych ziaren losowości ($42, 123, 999$).
+
+Podsumowanie uzyskanych dokładności (\textit{accuracy}) predykcji na zbiorze uczącym i testowym przedstawiono w Tabeli \ref{tab:k1_accuracy}.
+
+\begin{table}[H]
+    \centering
+    \caption{Dokładność klasyfikacji dla modeli finalnych w zależności od funkcji aktywacji (średnia $\pm$ odchylenie standardowe z 3 ziaren).}
+    \label{tab:k1_accuracy}
+    \begin{tabular}{llcc}
+        \toprule
+        \textbf{Zbiór danych} & \textbf{Funkcja aktywacji} & \textbf{Zbiór testowy [\%]} & \textbf{Zbiór uczący [\%]} \\
+        \midrule
+        \texttt{data.simple}      & Sigmoid & $97.33 \pm 1.25$ & $96.67 \pm 2.49$ \\
+                                  & Tanh    & $99.67 \pm 0.47$ & $100.00 \pm 0.00$ \\
+                                  & ReLU    & $99.67 \pm 0.47$ & $100.00 \pm 0.00$ \\
+        \midrule
+        \texttt{data.three\_gauss} & Sigmoid & $93.11 \pm 0.16$ & $92.44 \pm 0.16$ \\
+                                  & Tanh    & $92.89 \pm 0.16$ & $92.56 \pm 0.16$ \\
+                                  & ReLU    & $93.22 \pm 0.16$ & $94.11 \pm 0.16$ \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+% --------------------------------------------------------------------------
+\subsubsection{Zbiór danych simple}
+
+W zadaniu binarnym modele z aktywacją \texttt{Tanh} oraz \texttt{ReLU} zdołały w $100\%$ nauczyć się rozpoznawać klasy na zbiorach treningowych
+i dobrze generalizują to na zbiorze testowym ($99.67\%$).
+Funkcja \texttt{Sigmoid} zbiegała wyraźnie wolniej ze względu na nasycenie gradientu (stosunkowo mała wartość pochodnej funkcji sigma).
+Poniżej przedstawiono wykresy ilustrujące przebieg uczenia i finalne rezultaty na zbiorze prostym.
+
+Na Rysunku~\ref{fig:k1_simple_accuracy} można zaobserwować, że dokładność sieci z aktywacją \texttt{Sigmoid} znacznie wolniej zbiega do 1.
+Dodatkowo trajektoria krzywej jest bardziej chaotyczna i wykazuje większe odchylenie standardowe (na badanej próbce 3 ziaren losowych), co sugeruje,
+że aktywacja \texttt{Sigmoid} jest bardziej wrażliwa na losową inicjalizację wag.
+Gdy porównać nasycenie kolorów na Rysunku~\ref{fig:k1_simple_boundaries},
+widać, że granice decyzyjne dla funkcji \texttt{ReLU} i \texttt{Tanh} są jasno zdefiniowane, co oznacza, że model jest pewny swoich decyzji.
+W przypadku \texttt{Sigmoid} sytuacja jest odwrotna — występuje szerokie pasmo wysokiej niepewności (szacowane prawdopodobieństwo bliskie 0.5).
+Przebieg funkcji straty (Rysunek~\ref{fig:k1_simple_loss}) pokazuje gwałtowny spadek błędu treningowego dla \texttt{ReLU} i \texttt{Tanh} już w pierwszych 20 epokach, 
+podczas gdy strata w modelu \texttt{Sigmoid} maleje powoli i jednostajnie przez cały trening.
+Ewolucja pierwszej wagi $w_{0,0}$ oraz biasu $b_0$ pierwszego neuronu (Rysunek~\ref{fig:k1_simple_neuron_weights}) pokazuje stabilny ruch parametrów bez oscylacji,
+z największą dynamiką adaptacji widoczną w warstwie wyjściowej.
+Z kolei zestawienie norm Frobeniusa macierzy wag w każdej z warstw (Rysunek~\ref{fig:k1_simple_weight_norms}) wskazuje na powolny,
+wzrost normy wag we wszystkich warstwach bez nagłych nieprzewidywalnych zmian, przy czym najwyższe wartości osiąga sieć z aktywacją \texttt{ReLU}.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.90\textwidth]{../experiments/results/classification/k1_simple_accuracy_curves.png}
+    \caption{Przebieg dokładności klasyfikacji w kolejnych epokach dla zbioru \texttt{data.simple} (średnia z 3 ziaren z przedziałem $\pm 1\sigma$).}
+    \label{fig:k1_simple_accuracy}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.90\textwidth]{../experiments/results/classification/k1_simple_decision_boundaries.png}
+    \caption{Granice decyzyjne w przestrzeni $\mathbb{R}^2$ dla zbioru \texttt{data.simple} w zależności od funkcji aktywacji.}
+    \label{fig:k1_simple_boundaries}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.90\textwidth]{../experiments/results/classification/k1_simple_loss_curves.png}
+    \caption{Przebieg funkcji straty w kolejnych epokach dla zbioru \texttt{data.simple} (średnia z 3 ziaren z przedziałem $\pm 1\sigma$).}
+    \label{fig:k1_simple_loss}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.90\textwidth]{../experiments/results/classification/k1_simple_neuron_weights.png}
+    \caption{Ewolucja wagi $w_{0,0}$ i biasu $b_0$ pierwszego neuronu poszczególnych warstw dla zbioru \texttt{data.simple} (ziarno 42).}
+    \label{fig:k1_simple_neuron_weights}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.90\textwidth]{../experiments/results/classification/k1_simple_weight_norms.png}
+    \caption{Ewolucja norm Frobeniusa wag poszczególnych warstw w trakcie treningu dla zbioru \texttt{data.simple}.}
+    \label{fig:k1_simple_weight_norms}
+\end{figure}
+
+% --------------------------------------------------------------------------
+\subsubsection{Zbiór danych three\_gauss}
+
+W zagadnieniu wieloklasowym wszystkie badane funkcje aktywacji osiągnęły zbliżoną dokładność na poziomie $92.9$--$93.2\%$.
+Ograniczenie to wynika z fizycznego nakładania się na siebie rozkładów trzech klas.
+
+Na Rysunku~\ref{fig:k1_three_gauss_boundaries} przedstawiono wyznaczone granice decyzyjne w przestrzeni $\mathbb{R}^2$.
+Funkcja \texttt{ReLU} tworzy odcinkowo liniowe krawędzie podziału, podczas gdy \texttt{Tanh} i \texttt{Sigmoid} wyznaczają gładkie krzywe.
+We wszystkich modelach widoczne są punkty błędnie zaklasyfikowane w centralnej strefie nakładania się klas.
+Krzywe dokładności na Rysunku~\ref{fig:k1_three_gauss_accuracy} pokazują, że \texttt{ReLU} i \texttt{Tanh} już w kilkunastu epokach osiągają dokładność ok. $93\%$,
+podczas gdy \texttt{Sigmoid} początkowo mocno oscyluje i potrzebuje ponad 80 epok na ustabilizowanie predykcji.
+Przebieg funkcji straty kategorycznej entropii krzyżowej (\texttt{CCE}) (Rysunek~\ref{fig:k1_three_gauss_loss}) potwierdza szybki spadek błędu dla \texttt{ReLU} i \texttt{Tanh}
+poniżej poziomu $0.2$, podczas gdy strata \texttt{Sigmoid} zbiega powoli, osiągając ostatecznie wartość ok.~$0.3$.
+Analiza trajektorii wag $w_{0,0}$ i biasów $b_0$ pierwszego neuronu (Rysunek~\ref{fig:k1_three_gauss_neuron_weights}) wskazuje na płynną ewolucję parametrów poszczególnych warstw,
+które po początkowym etapie uczenia zbiegają do pewnych wartości.
+Wykres norm Frobeniusa macierzy wag (Rysunek~\ref{fig:k1_three_gauss_weight_norms}) świadczy o stabilności procesu uczenia we wszystkich warstwach sieci,
+potwierdzając brak problemów z eksplozją gradientu przy zastosowanym kroku uczenia $\eta = 0.05$.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.90\textwidth]{../experiments/results/classification/k1_three_gauss_decision_boundaries.png}
+    \caption{Granice decyzyjne w przestrzeni $\mathbb{R}^2$ dla zbioru \texttt{data.three\_gauss} w zależności od funkcji aktywacji.}
+    \label{fig:k1_three_gauss_boundaries}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.90\textwidth]{../experiments/results/classification/k1_three_gauss_accuracy_curves.png}
+    \caption{Przebieg dokładności klasyfikacji w kolejnych epokach dla zbioru \texttt{data.three\_gauss} (średnia z 3 ziaren z przedziałem $\pm 1\sigma$).}
+    \label{fig:k1_three_gauss_accuracy}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.90\textwidth]{../experiments/results/classification/k1_three_gauss_loss_curves.png}
+    \caption{Przebieg funkcji straty w kolejnych epokach dla zbioru \texttt{data.three\_gauss} (średnia z 3 ziaren z przedziałem $\pm 1\sigma$).}
+    \label{fig:k1_three_gauss_loss}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.90\textwidth]{../experiments/results/classification/k1_three_gauss_neuron_weights.png}
+    \caption{Ewolucja wagi $w_{0,0}$ i biasu $b_0$ pierwszego neuronu poszczególnych warstw dla zbioru \texttt{data.three\_gauss} (ziarno 42).}
+    \label{fig:k1_three_gauss_neuron_weights}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.90\textwidth]{../experiments/results/classification/k1_three_gauss_weight_norms.png}
+    \caption{Ewolucja norm Frobeniusa wag poszczególnych warstw w trakcie treningu dla zbioru \texttt{data.three\_gauss}.}
+    \label{fig:k1_three_gauss_weight_norms}
+\end{figure}
+
+% --------------------------------------------------------------------------
+\paragraph{Wnioski.}
+Podsumowując wyniki:
+\begin{itemize}
+    \item Funkcje aktywacji \texttt{Tanh} oraz \texttt{ReLU} zapewniają znacznie szybszą redukcję błędu i wyższą odporność na losową inicjalizację parametrów niż funkcja \texttt{Sigmoid},
+    która cierpi na spowolnienie uczenia wywołane nasyceniem gradientu.
+    \item Kształt wyznaczonych granic decyzyjnych odzwierciedla charakter funkcji aktywacji (odcinkowo liniowe dla \texttt{ReLU} vs gładkie dla \texttt{Tanh}).
+    W zbiorze \texttt{data.three\_gauss} w którym klasy się nakładają wszystkie modele osiągają zbliżoną skuteczność ograniczoną górną granicą ok. $93\%$.
+    \item Ewolucja norm wag oraz trajektorii pojedynczych neuronów przebiega stabilnie we wszystkich wariantach, potwierdzając że implementacja jest poprawna.
+\end{itemize}
 
 \subsection{Wpływ architektury sieci: głębokość i szerokość}
 % TODO: Zbadaj wpływ głębokości (0 do 4 warstw) na zdolność rozdzielania klas.
 % - Wnioski: ograniczenia modelu liniowego (0 warstw) vs nieliniowe granice sieci głębokich.
 
 \subsection{Wpływ miary błędu (funkcji straty)}
+\label{sec:K3}
 % TODO: Porównaj entropię krzyżową (Cross-Entropy) oraz błąd średniokwadratowy (MSE).
 % - Wnioski: zjawisko nasycenia gradientu dla MSE przy wyjściu sigmoidalnym/softmaxowym.
 

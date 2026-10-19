@@ -76,6 +76,8 @@ def run_experiment_k1(seeds: list[int] | None = None, n_samples: int = 100) -> N
         seeds: Random seeds for statistical evaluation. Defaults to [42, 123, 999].
         n_samples: Number of samples in dataset. Defaults to 100 so that results are intentionally worse.
     """
+    epochs = 150
+
     if seeds is None:
         seeds = [42, 123, 999]
 
@@ -164,7 +166,7 @@ def run_experiment_k1(seeds: list[int] | None = None, n_samples: int = 100) -> N
                     y_train=dataset.y_train,
                     loss_fn=loss_fn,
                     optimizer=optimizer,
-                    epochs=150,
+                    epochs=epochs,
                     batch_size=32,
                     validation_data=(dataset.x_test, dataset.y_test),
                     metrics={"acc": acc_metric},
@@ -217,7 +219,7 @@ def run_experiment_k1(seeds: list[int] | None = None, n_samples: int = 100) -> N
         print(f"   [Wykres] Zapisano granice decyzyjne: {boundary_path.name}")
 
         # Plot 2: Loss curves with std dev band
-        epochs_range = np.arange(1, 151)
+        epochs_range = np.arange(1, epochs + 1)
         loss_plot_path = results_dir / f"k1_{ds_name}_loss_curves.png"
         plot_learning_curves_with_std(
             epochs=epochs_range,
