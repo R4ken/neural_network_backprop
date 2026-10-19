@@ -409,14 +409,42 @@ def run_experiment_k2(
         rep_models: dict[str, MLP] = {}
         rep_neuron_trajectories: dict[str, NeuronTrajectory] = {}
 
-        deep_norm_runs: list[list[list[float]]] = []
-        deep_layer_names = [
-            "Warstwa 1 (2 -> 64)",
-            "Warstwa 2 (64 -> 32)",
-            "Warstwa 3 (32 -> 16)",
-            "Warstwa 4 (16 -> 8)",
-            f"Warstwa wyjściowa (8 -> {output_dim})",
+        norm_configs = [
+            {
+                "key": "1_hidden_medium",
+                "suffix": "shallow",
+                "desc": "1-warstwowej",
+                "layer_names": [
+                    "Warstwa 1 (2 -> 16)",
+                    f"Warstwa wyjściowa (16 -> {output_dim})",
+                ],
+            },
+            {
+                "key": "2_hidden_b",
+                "suffix": "medium",
+                "desc": "2-warstwowej",
+                "layer_names": [
+                    "Warstwa 1 (2 -> 32)",
+                    "Warstwa 2 (32 -> 16)",
+                    f"Warstwa wyjściowa (16 -> {output_dim})",
+                ],
+            },
+            {
+                "key": "4_hidden",
+                "suffix": "deep",
+                "desc": "4-warstwowej",
+                "layer_names": [
+                    "Warstwa 1 (2 -> 64)",
+                    "Warstwa 2 (64 -> 32)",
+                    "Warstwa 3 (32 -> 16)",
+                    "Warstwa 4 (16 -> 8)",
+                    f"Warstwa wyjściowa (8 -> {output_dim})",
+                ],
+            },
         ]
+        norm_runs_by_key: dict[str, list[list[list[float]]]] = {
+            cfg["key"]: [] for cfg in norm_configs
+        }
 
         train_acc_means: list[float] = []
         train_acc_stds: list[float] = []
@@ -469,8 +497,8 @@ def run_experiment_k2(
                 acc_curves[arch_name]["train"].append(history["acc"])
                 acc_curves[arch_name]["test"].append(history["val_acc"])
 
-                if arch_key == "4_hidden":
-                    deep_norm_runs.append(history["weight_norms"])
+                if arch_key in norm_runs_by_key:
+                    norm_runs_by_key[arch_key].append(history["weight_norms"])
 
                 final_train_losses.append(history["loss"][-1])
                 final_test_losses.append(history["val_loss"][-1])
@@ -567,16 +595,20 @@ def run_experiment_k2(
         )
         print(f"   [Wykres 4/6] Zapisano krzywe dokładności: {acc_plot_path.name}")
 
-        # Plot 5: Weight Frobenius norms evolution across all Dense layers in the 4-layer network
-        norm_plot_path = results_dir / f"k2_{ds_name}_weight_norms_deep.png"
-        plot_deep_model_weight_norms(
-            epochs=epochs_range,
-            seed_runs=deep_norm_runs,
-            layer_names=deep_layer_names,
-            title=f"Ewolucja norm wag poszczególnych warstw w sieci 4-warstwowej: {ds_name} (Średnia z {len(seeds)} ziaren)",
-            save_path=norm_plot_path,
-        )
-        print(f"   [Wykres 5/6] Zapisano normy wag sieci 4-warstwowej: {norm_plot_path.name}")
+        # Plot 5: Weight Frobenius norms evolution across Dense layers (shallow, medium, deep)
+        for norm_cfg in norm_configs:
+            arch_key = norm_cfg["key"]
+            suffix = norm_cfg["suffix"]
+            desc = norm_cfg["desc"]
+            norm_plot_path = results_dir / f"k2_{ds_name}_weight_norms_{suffix}.png"
+            plot_deep_model_weight_norms(
+                epochs=epochs_range,
+                seed_runs=norm_runs_by_key[arch_key],
+                layer_names=norm_cfg["layer_names"],
+                title=f"Ewolucja norm wag poszczególnych warstw w sieci {desc}: {ds_name} (Średnia z {len(seeds)} ziaren)",
+                save_path=norm_plot_path,
+            )
+            print(f"   [Wykres 5 ({suffix})] Zapisano normy wag sieci {desc}: {norm_plot_path.name}")
 
         # Plot 6: First neuron comparison (1x3) across shallow, medium, deep architectures
         neuron_plot_path = results_dir / f"k2_{ds_name}_neuron_weights.png"

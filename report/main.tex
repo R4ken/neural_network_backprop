@@ -171,7 +171,7 @@ się na rozmiarze $N = 100$.
     \label{fig:dataset_three_gauss}
 \end{figure}
 
-\subsection{Eksperyment 1 - Wpływ funkcji aktywacji w warstwach ukrytych}
+\subsection{Eksperyment 1 - Funkcje aktywacji w warstwach ukrytych}
 \label{sec:K1}
 
 W ramach eksperymentu zbadano wpływ doboru funkcji aktywacji w warstwach ukrytych 
@@ -191,12 +191,12 @@ Podsumowanie uzyskanych dokładności (\textit{accuracy}) predykcji na zbiorze u
         \textbf{Zbiór danych} & \textbf{Funkcja aktywacji} & \textbf{Zbiór testowy [\%]} & \textbf{Zbiór uczący [\%]} \\
         \midrule
         \texttt{data.simple}      & Sigmoid & $97.33 \pm 1.25$ & $96.67 \pm 2.49$ \\
-                                  & Tanh    & $99.67 \pm 0.47$ & $100.00 \pm 0.00$ \\
-                                  & ReLU    & $99.67 \pm 0.47$ & $100.00 \pm 0.00$ \\
+                                  & Tanh    & $\mathbf{99.67} \pm 0.47$ & $100.00 \pm 0.00$ \\
+                                  & ReLU    & $\mathbf{99.67} \pm 0.47$ & $100.00 \pm 0.00$ \\
         \midrule
         \texttt{data.three\_gauss} & Sigmoid & $93.11 \pm 0.16$ & $92.44 \pm 0.16$ \\
-                                  & Tanh    & $92.89 \pm 0.16$ & $92.56 \pm 0.16$ \\
-                                  & ReLU    & $93.22 \pm 0.16$ & $94.11 \pm 0.16$ \\
+                                  & Tanh    & $992.8 \pm 0.16$ & $92.56 \pm 0.16$ \\
+                                  & ReLU    & $\mathbf{93.22} \pm 0.16$ & $94.11 \pm 0.16$ \\
         \bottomrule
     \end{tabular}
 \end{table}
@@ -217,10 +217,10 @@ widać, że granice decyzyjne dla funkcji \texttt{ReLU} i \texttt{Tanh} są jasn
 W przypadku \texttt{Sigmoid} sytuacja jest odwrotna — występuje szerokie pasmo wysokiej niepewności (szacowane prawdopodobieństwo bliskie 0.5).
 Przebieg funkcji straty (Rysunek~\ref{fig:k1_simple_loss}) pokazuje gwałtowny spadek błędu treningowego dla \texttt{ReLU} i \texttt{Tanh} już w pierwszych 20 epokach, 
 podczas gdy strata w modelu \texttt{Sigmoid} maleje powoli i jednostajnie przez cały trening.
-Ewolucja pierwszej wagi $w_{0,0}$ oraz biasu $b_0$ pierwszego neuronu (Rysunek~\ref{fig:k1_simple_neuron_weights}) pokazuje stabilny ruch parametrów bez oscylacji,
-z największą dynamiką adaptacji widoczną w warstwie wyjściowej.
-Z kolei zestawienie norm Frobeniusa macierzy wag w każdej z warstw (Rysunek~\ref{fig:k1_simple_weight_norms}) wskazuje na powolny,
-wzrost normy wag we wszystkich warstwach bez nagłych nieprzewidywalnych zmian, przy czym najwyższe wartości osiąga sieć z aktywacją \texttt{ReLU}.
+Zmiany pierwszej wagi $w_{0,0}$ oraz biasu $b_0$ pierwszego neuronu (Rysunek~\ref{fig:k1_simple_neuron_weights}) są stabilne i nie ma w nich oscylacji.
+Zestawienie norm Frobeniusa macierzy wag w każdej z warstw (Rysunek~\ref{fig:k1_simple_weight_norms}) wskazuje na powolny
+wzrost normy wag we wszystkich warstwach bez nagłych nieprzewidywalnych zmian, przy czym przez większość czasu najwyższe
+wartości osiąga sieć z aktywacją \texttt{ReLU}.
 
 \begin{figure}[H]
     \centering
@@ -260,20 +260,15 @@ wzrost normy wag we wszystkich warstwach bez nagłych nieprzewidywalnych zmian, 
 % --------------------------------------------------------------------------
 \subsubsection{Zbiór danych three\_gauss}
 
-W zagadnieniu wieloklasowym wszystkie badane funkcje aktywacji osiągnęły zbliżoną dokładność na poziomie $92.9$--$93.2\%$.
+W zbiorze wieloklasowym wszystkie badane funkcje aktywacji osiągnęły zbliżoną dokładność na poziomie $92.9$--$93.2\%$.
 Ograniczenie to wynika z fizycznego nakładania się na siebie rozkładów trzech klas.
 
-Na Rysunku~\ref{fig:k1_three_gauss_boundaries} przedstawiono wyznaczone granice decyzyjne w przestrzeni $\mathbb{R}^2$.
+Na Rysunku~\ref{fig:k1_three_gauss_boundaries} przedstawiono finalne granice decyzyjne w przestrzeni $\mathbb{R}^2$.
 Funkcja \texttt{ReLU} tworzy odcinkowo liniowe krawędzie podziału, podczas gdy \texttt{Tanh} i \texttt{Sigmoid} wyznaczają gładkie krzywe.
 We wszystkich modelach widoczne są punkty błędnie zaklasyfikowane w centralnej strefie nakładania się klas.
 Krzywe dokładności na Rysunku~\ref{fig:k1_three_gauss_accuracy} pokazują, że \texttt{ReLU} i \texttt{Tanh} już w kilkunastu epokach osiągają dokładność ok. $93\%$,
 podczas gdy \texttt{Sigmoid} początkowo mocno oscyluje i potrzebuje ponad 80 epok na ustabilizowanie predykcji.
-Przebieg funkcji straty kategorycznej entropii krzyżowej (\texttt{CCE}) (Rysunek~\ref{fig:k1_three_gauss_loss}) potwierdza szybki spadek błędu dla \texttt{ReLU} i \texttt{Tanh}
-poniżej poziomu $0.2$, podczas gdy strata \texttt{Sigmoid} zbiega powoli, osiągając ostatecznie wartość ok.~$0.3$.
-Analiza trajektorii wag $w_{0,0}$ i biasów $b_0$ pierwszego neuronu (Rysunek~\ref{fig:k1_three_gauss_neuron_weights}) wskazuje na płynną ewolucję parametrów poszczególnych warstw,
-które po początkowym etapie uczenia zbiegają do pewnych wartości.
-Wykres norm Frobeniusa macierzy wag (Rysunek~\ref{fig:k1_three_gauss_weight_norms}) świadczy o stabilności procesu uczenia we wszystkich warstwach sieci,
-potwierdzając brak problemów z eksplozją gradientu przy zastosowanym kroku uczenia $\eta = 0.05$.
+Pozostałe wykresy obrazują podobne zjawiska jak w przypadku zbioru \texttt{data.simple}.
 
 \begin{figure}[H]
     \centering
@@ -321,9 +316,212 @@ Podsumowując wyniki:
     \item Ewolucja norm wag oraz trajektorii pojedynczych neuronów przebiega stabilnie we wszystkich wariantach, potwierdzając że implementacja jest poprawna.
 \end{itemize}
 
-\subsection{Wpływ architektury sieci: głębokość i szerokość}
-% TODO: Zbadaj wpływ głębokości (0 do 4 warstw) na zdolność rozdzielania klas.
-% - Wnioski: ograniczenia modelu liniowego (0 warstw) vs nieliniowe granice sieci głębokich.
+\subsection{Eksperyment 2 - Architektura sieci}
+\label{sec:K2}
+
+W ramach eksperymentu zbadano przebieg uczenia i finalne wyniki sieci w zależności od jej głębokości (od 0 do 4 warstw ukrytych) oraz wielkości poszczególnych warstw.
+Przetestowano 8 wariantów (gdzie $C$ oznacza liczbę rozpoznawanych klas):
+\begin{itemize}
+    \item model liniowy bez warstw ukrytych $[2, C]$
+    \item trzy modele z 1 warstwą ukrytą ($[2, 4, C]$, $[2, 16, C]$, $[2, 64, C]$)
+    \item dwa modele 2 warstwowe ($[2, 16, 8, C]$, $[2, 32, 16, C]$)
+    \item sieć 3 warstwową $[2, 32, 16, 8, C]$
+    \item sieć 4 warstwową $[2, 64, 32, 16, 8, C]$
+\end{itemize}
+Na podstawie wyników \hyperref[sec:K1]{eskperymentu 1}, tym razem zastosowano wszędzie funkcję aktywacji \texttt{ReLU}
+w warstwach ukrytych. Ziarna losowości pozostają bez zmian ($42, 123, 999$). Natomiast hiperparametry uczenia zostały lekko zmodyfikowane 
+($\eta = 0.01$, 250 epok) aby głębsze sieci miały szansę zostać dotrenowane.
+
+% --------------------------------------------------------------------------
+\subsubsection{Zbiór danych simple}
+
+Wyniki dokładności klasyfikacji dla badanych architektur na zbiorze \texttt{data.simple} przedstawiono w Tabeli~\ref{tab:k2_accuracy_simple}.
+
+\begin{table}[H]
+    \centering
+    \setlength{\tabcolsep}{5pt}
+    \caption{Dokładność klasyfikacji w zależności od architektury dla zbioru \texttt{data.simple} (średnia $\pm$ odchylenie standardowe z 3 ziaren).}
+    \label{tab:k2_accuracy_simple}
+    \begin{tabular}{lccc}
+        \toprule
+        \textbf{Architektura} & \textbf{Warstwy ukryte} & \textbf{Zbiór testowy [\%]} & \textbf{Zbiór uczący [\%]} \\
+        \midrule
+        0 ukrytych: $[2]$                  & 0 & $95.33 \pm 1.25$ & $94.00 \pm 0.82$ \\
+        1 ukryta (4): $[2, 4]$             & 1 & $92.00 \pm 3.27$ & $90.00 \pm 2.16$ \\
+        1 ukryta (16): $[2, 16]$           & 1 & $98.67 \pm 1.25$ & $96.67 \pm 0.94$ \\
+        1 ukryta (64): $[2, 64]$           & 1 & $98.33 \pm 0.94$ & $99.33 \pm 0.47$ \\
+        2 ukryte (A): $[2, 16, 8]$         & 2 & $98.33 \pm 0.94$ & $99.33 \pm 0.47$ \\
+        2 ukryte (B): $[2, 32, 16]$        & 2 & $\mathbf{99.33 \pm 0.47}$ & $100.00 \pm 0.00$ \\
+        3 ukryte: $[2, 32, 16, 8]$         & 3 & $98.67 \pm 1.25$ & $99.67 \pm 0.47$ \\
+        4 ukryte: $[2, 64, 32, 16, 8]$     & 4 & $98.67 \pm 0.47$ & $100.00 \pm 0.00$ \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+Na Rysunku~\ref{fig:k2_simple_boundaries} przedstawiono zmiany granic decyzyjnych wraz ze wzrostem złożoności sieci.
+Model liniowy (zero warstw ukrytych) wyznacza liniową granicę, która nie jest w stanie dokładnie odwzorować zakrzywionego kształtu klas
+podczas gdy dodanie jednej ukrytej warstwy 16 neuronów pozwala na płynne dopasowanie granicy i znacznie lepsze podzielenie przestrzeni.
+Głębsze architektury oferują bardziej pewne predykcje i bardziej szczegółową krzywą rozdzielającą przestrzeń.
+
+Krzywe dokładności wraz z postępami w uczeniu (Rysunek~\ref{fig:k2_simple_accuracy}) pokazują, że sieci głębsze (2-4 warstwy)
+osiągają zbieżność znacznie szybciej i mają mniejsze odchylenie standardowe.
+Wąska sieć $[2, 4]$ uczy się z kolei bardzo wolno, z szerokim przedziałem niepewności co sugeruje że jest wrażliwa na inicjalizajcę wag.
+Podobnie w przypadku funkcji straty, (Rysunek~\ref{fig:k2_simple_loss}) sieci płytkie uczą się wolniej 
+(w szcególności model liniowy przy 250 epokach zatrzymuje się na poziomie ok. $0.38$),
+a dodawanie kolejnych warstw z reguły sprawia że sieć szybciej zmniejsza swój błąd uczenia.
+Największa przetestowana sieć 4 warstwowa osiąga wartość straty na poziomie $0.05$.
+
+Kolejne trzy rysunki przedstawiają zmianę norm wag w czasie uczenia dla kilku architektur.
+Dla ustalenia uwagi przyglądamy się trzem z nich:
+\begin{itemize}
+    \item sieci bardzo płytkiej z 1 warstwą ukrytą: $[2, 16, 1]$ (Rysunek~\ref{fig:k2_simple_weight_norms_shallow}),
+    \item sieci średniej z 2 warstwami ukrytymi: $[2, 32, 16, 1]$ (Rysunek~\ref{fig:k2_simple_weight_norms_medium}),
+    \item sieci głębokiej z 4 warstwami ukrytymi: $[2, 64, 32, 16, 8, 1]$ (Rysunek~\ref{fig:k2_simple_weight_norms_deep}).
+\end{itemize}
+
+Porównanie zmian norm Frobeniusa macierzy wag $\|W\|_F$ dla tych trzech sieci prowadzi do następujących obserwacji:
+\begin{enumerate}
+    \item \textbf{Wartości początkowe}: Wartości początkowe norm zależą od rozmiaru macierzy wag 
+    oraz schematu inicjalizacji (\texttt{He} dla warstw ukrytych \texttt{ReLU}, \texttt{Xavier} dla warstwy wyjściowej).
+    Najwyższe normy osiągają macierze o największej liczbie połączeń (np. warstwa 2 o wymiarach $64 \times 32$ w sieci 4-warstwowej).
+    \item \textbf{Zmiana parametrów w czasie}: We wszystkich trzech modelach normy wag rosną monotonicznie i gładko
+    w trakcie całego treningu, co świadczy o stabilności aglorytmu \texttt{SGD} przy kroku $\eta = 0.01$.
+    \item \textbf{Różnice między warstwami}: W sieci płytkiej $[2, 16]$ norma warstwy wyjściowej rosną najbardziej,
+    prawdopodobnie dlatego, że to ta warstwa dysponuje większą ilością informacji (16 cech zamiast tylko 2).
+    Z kolei w sieciach 2 i 4 warstwowych tempo zmiany norm wag wygląda podobnie.
+\end{enumerate}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.92\textwidth]{../experiments/results/classification/k2_simple_decision_boundaries.png}
+    \caption{Kształt granic decyzyjnych w przestrzeni cech $\mathbb{R}^2$ dla zbioru \texttt{data.simple} w zależności od architektury sieci.}
+    \label{fig:k2_simple_boundaries}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.90\textwidth]{../experiments/results/classification/k2_simple_accuracy_curves.png}
+    \caption{Przebieg dokładności klasyfikacji w kolejnych epokach dla zbioru \texttt{data.simple} w zależności od architektury (średnia z 3 ziaren z przedziałem $\pm 1\sigma$).}
+    \label{fig:k2_simple_accuracy}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.90\textwidth]{../experiments/results/classification/k2_simple_loss_curves.png}
+    \caption{Przebieg funkcji straty w kolejnych epokach dla zbioru \texttt{data.simple} w zależności od architektury (średnia z 3 ziaren z przedziałem $\pm 1\sigma$).}
+    \label{fig:k2_simple_loss}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.88\textwidth]{../experiments/results/classification/k2_simple_weight_norms_shallow.png}
+    \caption{Ewolucja norm Frobeniusa wag poszczególnych warstw w sieci 1-warstwowej (\texttt{data.simple}, średnia z 3 ziaren z przedziałem $\pm 1\sigma$).}
+    \label{fig:k2_simple_weight_norms_shallow}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.88\textwidth]{../experiments/results/classification/k2_simple_weight_norms_medium.png}
+    \caption{Ewolucja norm Frobeniusa wag poszczególnych warstw w sieci 2-warstwowej (\texttt{data.simple}, średnia z 3 ziaren z przedziałem $\pm 1\sigma$).}
+    \label{fig:k2_simple_weight_norms_medium}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.88\textwidth]{../experiments/results/classification/k2_simple_weight_norms_deep.png}
+    \caption{Ewolucja norm Frobeniusa wag poszczególnych warstw w sieci 4-warstwowej (\texttt{data.simple}, średnia z 3 ziaren z przedziałem $\pm 1\sigma$).}
+    \label{fig:k2_simple_weight_norms_deep}
+\end{figure}
+
+% --------------------------------------------------------------------------
+\subsubsection{Zbiór danych three\_gauss}
+
+Wyniki dokładności klasyfikacji w zbiorze wieloklasowym \texttt{data.three\_gauss} zestawiono w Tabeli~\ref{tab:k2_accuracy_three_gauss}.
+Tak jak w \hyperref[sec:K1]{eksperymencie 1}, można zaobserwować że żaden z modeli nie przekroczył granicy ok. $93.0\%$ z uwagi na nakładające się klasy.
+Natomiast modele głębsze radziły sobie odrobinę lepiej. Ciekawe jest to, że liniowy model bez żadnych warstw ukrytych osiąga podobny wynik do pozostałych sieci.
+Wskazuje to na to, że zbiór jest dość łatwy do rozdzielenia w sposób liniowy, a nauczenie się szumu wynikającego z nakładania się klas nie pozwala
+głębszym modelom osiągnąć znacząco lepszych wyników.
+
+\begin{table}[H]
+    \centering
+    \setlength{\tabcolsep}{5pt}
+    \caption{Dokładność klasyfikacji w zależności od architektury dla zbioru \texttt{data.three\_gauss} (średnia $\pm$ odchylenie standardowe z 3 ziaren).}
+    \label{tab:k2_accuracy_three_gauss}
+    \begin{tabular}{lccc}
+        \toprule
+        \textbf{Architektura} & \textbf{Warstwy ukryte} & \textbf{Zbiór testowy [\%]} & \textbf{Zbiór uczący [\%]} \\
+        \midrule
+        0 ukrytych: $[2]$                  & 0 & $92.78 \pm 0.16$ & $92.00 \pm 0.47$ \\
+        1 ukryta (4): $[2, 4]$             & 1 & $92.44 \pm 0.87$ & $91.33 \pm 0.54$ \\
+        1 ukryta (16): $[2, 16]$           & 1 & $92.67 \pm 0.27$ & $91.78 \pm 0.16$ \\
+        1 ukryta (64): $[2, 64]$           & 1 & $92.89 \pm 0.16$ & $92.67 \pm 0.27$ \\
+        2 ukryte (A): $[2, 16, 8]$         & 2 & $92.78 \pm 0.16$ & $92.33 \pm 0.00$ \\
+        2 ukryte (B): $[2, 32, 16]$        & 2 & $\mathbf{93.44 \pm 0.16}$ & $93.22 \pm 0.63$ \\
+        3 ukryte: $[2, 32, 16, 8]$         & 3 & $\mathbf{93.44 \pm 0.16}$ & $93.67 \pm 0.27$ \\
+        4 ukryte: $[2, 64, 32, 16, 8]$     & 4 & $\mathbf{93.44 \pm 0.16}$ & $94.33 \pm 0.00$ \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+Na Rysunku~\ref{fig:k2_three_gauss_boundaries} zobrazowano granice decyzyjne wyznaczone przez badane architektury. 
+Model liniowy, podobnie jak wcześniej dzieli przestrzeń prostymi, podczas gdy architektury głębsze tworzą dokładniejsze granice klasyfikacji. 
+We wszystkich przypadkach jednak w centrum obrazka widoczne są punkty błędnie zaklasyfikowane z uwagi na nakładanie się rozkładów.
+Pozostałe wykresy prezentują się bardzo podobnie do tych ze zbioru \texttt{data.simple}, wnioski są analogiczne. 
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.92\textwidth]{../experiments/results/classification/k2_three_gauss_decision_boundaries.png}
+    \caption{Kształt granic decyzyjnych w przestrzeni cech $\mathbb{R}^2$ dla zbioru \texttt{data.three\_gauss} w zależności od architektury sieci.}
+    \label{fig:k2_three_gauss_boundaries}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.90\textwidth]{../experiments/results/classification/k2_three_gauss_accuracy_curves.png}
+    \caption{Przebieg dokładności klasyfikacji w kolejnych epokach dla zbioru \texttt{data.three\_gauss} w zależności od architektury (średnia z 3 ziaren z przedziałem $\pm 1\sigma$).}
+    \label{fig:k2_three_gauss_accuracy}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.90\textwidth]{../experiments/results/classification/k2_three_gauss_loss_curves.png}
+    \caption{Przebieg funkcji straty w kolejnych epokach dla zbioru \texttt{data.three\_gauss} w zależności od architektury (średnia z 3 ziaren z przedziałem $\pm 1\sigma$).}
+    \label{fig:k2_three_gauss_loss}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.88\textwidth]{../experiments/results/classification/k2_three_gauss_weight_norms_shallow.png}
+    \caption{Ewolucja norm Frobeniusa wag poszczególnych warstw w sieci 1-warstwowej (\texttt{data.three\_gauss}, średnia z 3 ziaren z przedziałem $\pm 1\sigma$).}
+    \label{fig:k2_three_gauss_weight_norms_shallow}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.88\textwidth]{../experiments/results/classification/k2_three_gauss_weight_norms_medium.png}
+    \caption{Ewolucja norm Frobeniusa wag poszczególnych warstw w sieci 2-warstwowej (\texttt{data.three\_gauss}, średnia z 3 ziaren z przedziałem $\pm 1\sigma$).}
+    \label{fig:k2_three_gauss_weight_norms_medium}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.88\textwidth]{../experiments/results/classification/k2_three_gauss_weight_norms_deep.png}
+    \caption{Ewolucja norm Frobeniusa wag poszczególnych warstw w sieci 4-warstwowej (\texttt{data.three\_gauss}, średnia z 3 ziaren z przedziałem $\pm 1\sigma$).}
+    \label{fig:k2_three_gauss_weight_norms_deep}
+\end{figure}
+
+% --------------------------------------------------------------------------
+\paragraph{Wnioski.}
+Podsumowując badanie wpływu głębokości i szerokości modelu \texttt{MLP}:
+% W eksperymencie nie testowano bardzo głębokich sieci
+\begin{itemize}
+    \item W tych konkretnych zadaniach, model bez warstw ukrytych (liniowy) nieco gorzej od sieci głębszych.
+    Dla zbiory \texttt{data.simple} podział jest na tyle prosty, że model liniowy nie popełnia wielu błędów. Z kolei dla \texttt{data.three\_gauss}
+    szum jest na tyle duży że modele głębokie nie mają szansy daleko prześcignąć modelu liniowego, mimo że uczą się szybciej i osiągają mniejszy błąd.
+    \item Zwiększenie głębokości sieci do 2-4 warstw znacząco przyspiesza tempo zbieżności i obniża błąd treningowy, ale przyrost dokładności powyżej 2 warstw ukrytych jest już mniejszy. Dobrym kompromisem między wielkością sieci i osiąganą dokładnością wydaje się architektura średnia $[2, 32, 16]$. Osiąga ona najwyższy wynik na obu zbiorach ($99.33\%$ dla \texttt{data.simple} oraz $93.44\%$ dla \texttt{data.three\_gauss}).
+    \item Ziana norm Frobeniusa wag dla sieci bardzo płytkiej ($[2, 16]$), średniej ($[2, 32, 16]$) oraz głębokiej ($[2, 64, 32, 16, 8]$) potwierdza że optymalizacja wag we wszystkich warstwach jest stabilna. Przy wykorzystaniu aktywacji \texttt{ReLU}, inicjalizacja wag He chroni przed eksplozją lub zanikaniem gradientu. W sieci głębokiej tempo zmian wag warstw początkowych jest zbliżone do warstw końcowych (choć nie jest tak dynamiczne jak w poprzednim eksperymencie).
+    \item W zbiorze \texttt{data.simple} modele głębokie osiągają niemal zerowe straty treningową bez widocznego spadku wyników na zbiorze testowym. Do tego odchylenia standardowe norm i metryk wskazują na stabilność metody \texttt{SGD} względem ziarna losowego.
+\end{itemize}
 
 \subsection{Wpływ miary błędu (funkcji straty)}
 \label{sec:K3}
