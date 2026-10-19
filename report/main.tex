@@ -313,7 +313,7 @@ Podsumowując wyniki:
     która cierpi na spowolnienie uczenia wywołane nasyceniem gradientu.
     \item Kształt wyznaczonych granic decyzyjnych odzwierciedla charakter funkcji aktywacji (odcinkowo liniowe dla \texttt{ReLU} vs gładkie dla \texttt{Tanh}).
     W zbiorze \texttt{data.three\_gauss} w którym klasy się nakładają wszystkie modele osiągają zbliżoną skuteczność ograniczoną górną granicą ok. $93\%$.
-    \item Ewolucja norm wag oraz trajektorii pojedynczych neuronów przebiega stabilnie we wszystkich wariantach, potwierdzając że implementacja jest poprawna.
+    \item Ewolucja norm wag oraz trajektorii pojedynczych neuronów przebiega stabilnie we wszystkich wariantach, potwierdzając że implementacja jest poprawna. W kolejnych eksperymentach te wykresy będą pominietę dla większej czytelności.
 \end{itemize}
 
 \subsection{Eksperyment 2 - Architektura sieci}
@@ -523,14 +523,176 @@ Podsumowując badanie wpływu głębokości i szerokości modelu \texttt{MLP}:
     \item W zbiorze \texttt{data.simple} modele głębokie osiągają niemal zerowe straty treningową bez widocznego spadku wyników na zbiorze testowym. Do tego odchylenia standardowe norm i metryk wskazują na stabilność metody \texttt{SGD} względem ziarna losowego.
 \end{itemize}
 
-\subsection{Wpływ miary błędu (funkcji straty)}
+\subsection{Eksperyment 3 - Wpływ funkcji straty}
 \label{sec:K3}
-% TODO: Porównaj entropię krzyżową (Cross-Entropy) oraz błąd średniokwadratowy (MSE).
-% - Wnioski: zjawisko nasycenia gradientu dla MSE przy wyjściu sigmoidalnym/softmaxowym.
+
+W tym eksperymencie zbadano wpływ doboru funkcji straty na proces uczenia oraz jakość klasyfikacji.
+Porównano dwie funkcje celu: entropię krzyżową (\texttt{Cross-Entropy}: \texttt{BinaryCrossEntropy} + aktywacja wyjściowa \texttt{Sigmoid} dla klasyfikacji binarnej oraz \texttt{CategoricalCrossEntropy} + aktywacja wyjściowa \texttt{Softmax} dla wieloklasowej)
+oraz błąd średniokwadratowy (\texttt{MSE}).
+Pozostałe elementy sieci ustalono na podstawie wyników dwóch poprzednich eksperymentów:
+\begin{itemize}
+    \item architektura $[2, 32, 16, \text{wyjście}]$
+    \item warstwy ukryte z aktywacją \texttt{ReLU} i inicjalizacją \texttt{He}
+\end{itemize}
+Aby dokładniej sprawdzić zachowanie miar błedu, przetestowano trzy wartości współczynnika uczenia: $\eta \in \{0.01, 0.05, 0.2\}$.
+Wyniki uśredniono z 3 ziaren losowych.
+
+% --------------------------------------------------------------------------
+\subsubsection{Zbiór danych simple}
+
+Wyniki dokładności klasyfikacji na zbiorze binarnym \texttt{data.simple} zestawiono w Tabeli~\ref{tab:k3_accuracy_simple}.
+\texttt{Cross-Entropy} osiąga wysoką dokładność już przy najniższym kroku uczenia $\eta = 0.01$ ($99.67\%$).
+W przypadku błędu średniokwadratowego (\texttt{MSE}) przy małym kroku $\eta = 0.01$ sieć radzi sobie zauważalnie słabiej ($97.33\%$).
+Dopiero zwiększenie kroku uczenia do $\eta = 0.05$ lub $\eta = 0.2$ pozwala modelowi z funkcją \texttt{MSE} dorównać wynikom \texttt{Cross-Entropy}.
+
+\begin{table}[H]
+    \centering
+    \setlength{\tabcolsep}{6pt}
+    \caption{Dokładność klasyfikacji w zależności od funkcji straty i współczynnika uczenia $\eta$ dla zbioru \texttt{data.simple} (średnia $\pm$ odchylenie standardowe z 3 ziaren).}
+    \label{tab:k3_accuracy_simple}
+    \begin{tabular}{lccc}
+        \toprule
+        \textbf{Funkcja straty} & \textbf{Krok uczenia ($\eta$)} & \textbf{Zbiór testowy [\%]} & \textbf{Zbiór uczący [\%]} \\
+        \midrule
+        \texttt{Cross-Entropy} & $0.01$ & $\mathbf{99.67 \pm 0.47}$ & $99.00 \pm 1.41$ \\
+        \texttt{Cross-Entropy} & $0.05$ & $\mathbf{99.67 \pm 0.47}$ & $100.00 \pm 0.00$ \\
+        \texttt{Cross-Entropy} & $0.20$ & $99.33 \pm 0.47$ & $100.00 \pm 0.00$ \\
+        \midrule
+        \texttt{MSE}           & $0.01$ & $97.33 \pm 1.25$ & $98.00 \pm 1.41$ \\
+        \texttt{MSE}           & $0.05$ & $\mathbf{99.67 \pm 0.47}$ & $100.00 \pm 0.00$ \\
+        \texttt{MSE}           & $0.20$ & $99.33 \pm 0.47$ & $100.00 \pm 0.00$ \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+Na Rysunku~\ref{fig:k3_simple_boundaries} przedstawiono wyznaczone granice decyzyjne.
+Obie funkcje straty poprawnie rozdzielają zbiór, jednak dla \texttt{MSE} przy $\eta = 0.01$ granica jest mniej gładka i widać większe niezdecydowanie modelu w pobliżu punktów skrajnych.
+Przy wyższych współczynnikach uczenia granice stają się ostre i bardzo pewne w obu przypadkach.
+
+Przebieg dokładności (Rysunek~\ref{fig:k3_simple_accuracy}) oraz straty (Rysunek~\ref{fig:k3_simple_loss})
+ujawnia wyraźną przewagę tempa uczenia na korzyść \texttt{Cross-Entropy}.
+Model z \texttt{Cross-Entropy} osiąga niemal maksymalną dokładność już w ciągu pierwszych kilkunastu epok,
+podczas gdy \texttt{MSE} przy $\eta = 0.01$ uczy się wolno i z większym rozrzutem pomiędzy ziarnami.
+
+Kluczowe wyjaśnienie tego zachowania widać na wykresie dynamiki aktualizacji wag (Rysunek~\ref{fig:k3_simple_weight_dynamics}).
+Dla funkcji \texttt{MSE} obserwujemy zjawisko nasycenia gradientu.
+Pochodna błędu \texttt{MSE} względem sygnału wejściowego do neuronu wyjściowego zawiera mnożnik w postaci pochodnej sigmoidy $\sigma'(z)$.
+Gdy predykcja wyjściowa jest bliska $0$ lub $1$, pochodna $\sigma'(z)$ dąży do zera,
+co drastycznie tłumi gradient i sprawia, że poprawki wag $\|\Delta W\|$ są bardzo małe.
+W przypadku \texttt{Cross-Entropy} człon $\sigma'(z)$ skraca się w trakcie wyznaczania gradientu,
+a sygnał błędu zależy wprost od różnicy $(y_{pred} - y_{true})$, co zapewnia duże i skuteczne aktualizacje od samego początku treningu.
+Dopiero większy krok uczenia ($\eta = 0.05, 0.2$) w przypadku \texttt{MSE} pozwala zrekompensować małe wartości gradientu.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.92\textwidth]{../experiments/results/classification/k3_simple_decision_boundaries.png}
+    \caption{Granice decyzyjne w zależności od funkcji straty i kroku uczenia $\eta$ dla zbioru \texttt{data.simple}.}
+    \label{fig:k3_simple_boundaries}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.90\textwidth]{../experiments/results/classification/k3_simple_accuracy_curves.png}
+    \caption{Przebieg dokładności klasyfikacji w kolejnych epokach dla funkcji \texttt{Cross-Entropy} oraz \texttt{MSE} przy różnych wartościach $\eta$ (\texttt{data.simple}, średnia z 3 ziaren z przedziałem $\pm 1\sigma$).}
+    \label{fig:k3_simple_accuracy}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.90\textwidth]{../experiments/results/classification/k3_simple_loss_curves.png}
+    \caption{Przebieg funkcji straty w kolejnych epokach dla \texttt{Cross-Entropy} i \texttt{MSE} na rozdzielonych skalach (\texttt{data.simple}, średnia z 3 ziaren z przedziałem $\pm 1\sigma$).}
+    \label{fig:k3_simple_loss}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.90\textwidth]{../experiments/results/classification/k3_simple_weight_update_dynamics.png}
+    \caption{Dynamika wielkości aktualizacji wag $\|\Delta W\|$ w kolejnych epokach treningu (\texttt{data.simple}). Wyraźnie widoczne tłumienie aktualizacji dla \texttt{MSE} przy $\eta = 0.01$.}
+    \label{fig:k3_simple_weight_dynamics}
+\end{figure}
+
+% --------------------------------------------------------------------------
+\subsubsection{Zbiór danych three\_gauss}
+
+Wyniki dokładności dla wieloklasowego zbioru \texttt{data.three\_gauss} z warstwą wyjściową \texttt{Softmax} przedstawiono w Tabeli~\ref{tab:k3_accuracy_three_gauss}.
+Tak jak w poprzednich eksperymentach, ze względu na fizyczne nakładanie się rozkładów gaussowskich,
+żaden model nie przekracza progu ok. $93.2\%$.
+
+Nową obserwacją jest to, że w problemie wieloklasowym różnice w końcowej dokładności pomiędzy \texttt{Cross-Entropy} a \texttt{MSE} są jeszcze mniejsze:
+zarówno \texttt{Cross-Entropy}, jak i \texttt{MSE} osiągają ok. $93.0 - 93.2\%$ na zbiorze testowym.
+Niemniej jednak, przy małym kroku $\eta = 0.01$ funkcja \texttt{MSE} uczy się zauważalnie wolniej na zbiorze treningowym ($91.44\%$ wobec $92.89\%$ dla \texttt{Cross-Entropy}),
+co wskazuje na występowanie analogicznego zjawiska spłaszczenia gradientu przez pochodną funkcji \texttt{Softmax}.
+
+\begin{table}[H]
+    \centering
+    \setlength{\tabcolsep}{6pt}
+    \caption{Dokładność klasyfikacji w zależności od funkcji straty i współczynnika uczenia $\eta$ dla zbioru \texttt{data.three\_gauss} (średnia $\pm$ odchylenie standardowe z 3 ziaren).}
+    \label{tab:k3_accuracy_three_gauss}
+    \begin{tabular}{lccc}
+        \toprule
+        \textbf{Funkcja straty} & \textbf{Krok uczenia ($\eta$)} & \textbf{Zbiór testowy [\%]} & \textbf{Zbiór uczący [\%]} \\
+        \midrule
+        \texttt{Cross-Entropy} & $0.01$ & $93.11 \pm 0.16$ & $92.89 \pm 0.16$ \\
+        \texttt{Cross-Entropy} & $0.05$ & $\mathbf{93.22 \pm 0.16}$ & $94.11 \pm 0.16$ \\
+        \texttt{Cross-Entropy} & $0.20$ & $\mathbf{93.22 \pm 0.42}$ & $94.78 \pm 0.57$ \\
+        \midrule
+        \texttt{MSE}           & $0.01$ & $93.00 \pm 0.00$ & $91.44 \pm 1.03$ \\
+        \texttt{MSE}           & $0.05$ & $93.11 \pm 0.42$ & $93.00 \pm 0.27$ \\
+        \texttt{MSE}           & $0.20$ & $93.00 \pm 0.27$ & $93.89 \pm 0.42$ \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+Na Rysunku~\ref{fig:k3_three_gauss_boundaries} zobrazowano granice decyzyjne dla badanych wariantów.
+Dla obu funkcji straty przy krokach $\eta = 0.05$ i $\eta = 0.2$ granice prawidłowo wyodrębniają trzy obszary,
+a punkty błędnie zaklasyfikowane leżą wyłącznie w rejonie wzajemnego przenikania się klas w centrum.
+Pozostałe wykresy (Rysunki~\ref{fig:k3_three_gauss_accuracy}, \ref{fig:k3_three_gauss_loss} oraz \ref{fig:k3_three_gauss_weight_dynamics})
+prezentują zbliżone zjawiska i wnioski będą analogiczne jak dla zbioru \texttt{data.simple}.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.92\textwidth]{../experiments/results/classification/k3_three_gauss_decision_boundaries.png}
+    \caption{Granice decyzyjne w zależności od funkcji straty i kroku uczenia $\eta$ dla zbioru \texttt{data.three\_gauss}.}
+    \label{fig:k3_three_gauss_boundaries}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.90\textwidth]{../experiments/results/classification/k3_three_gauss_accuracy_curves.png}
+    \caption{Przebieg dokładności klasyfikacji w kolejnych epokach dla zbioru \texttt{data.three\_gauss} (średnia z 3 ziaren z przedziałem $\pm 1\sigma$).}
+    \label{fig:k3_three_gauss_accuracy}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.90\textwidth]{../experiments/results/classification/k3_three_gauss_loss_curves.png}
+    \caption{Przebieg funkcji straty w kolejnych epokach dla zbioru \texttt{data.three\_gauss} (średnia z 3 ziaren z przedziałem $\pm 1\sigma$).}
+    \label{fig:k3_three_gauss_loss}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.90\textwidth]{../experiments/results/classification/k3_three_gauss_weight_update_dynamics.png}
+    \caption{Dynamika wielkości aktualizacji wag $\|\Delta W\|$ w kolejnych epokach treningu (\texttt{data.three\_gauss}).}
+    \label{fig:k3_three_gauss_weight_dynamics}
+\end{figure}
+
+% --------------------------------------------------------------------------
+\paragraph{Wnioski.}
+Podsumowując porównanie \texttt{Cross-Entropy} oraz błędu średniokwadratowego (\texttt{MSE}) w zadaniach klasyfikacji:
+\begin{itemize}
+    \item \textbf{Przewaga \texttt{Cross-Entropy}}: Entropia krzyżowa jest lepiej dopasowana do zadań klasyfikacyjnych. Zapewnia szybszą zbieżność i wysoką dokładność już przy małych wartościach kroku uczenia ($\eta = 0.01$). 
+    \item \textbf{Zjawisko nasycenia w \texttt{MSE}}: Zastosowanie funkcji \texttt{MSE} prowadzi do spłaszczenia gradientu w pobliżu nasyconych stanów wyjścia (gdy wyjście jest bliskie 0 lub 1). Obecność pochodnej $\sigma'(z)$ w gradiencie drastycznie zmniejsza poprawki wag $\|\Delta W\|$, przez co sieć uczy się powoli w początkowych fazach.
+    \item \textbf{Wpływ współczynnika uczenia}: Wolniejsze uczenie modelu z funkcją \texttt{MSE} można częściowo skompensować poprzez zwiększenie wartości $\eta$ (np. do $0.05$ lub $0.2$). Przy większym kroku uczenia sieć z funkcją \texttt{MSE} osiąga ostatecznie zbliżoną dokładność do modelu z \texttt{Cross-Entropy}. Mimo to, entropia kryżowa ma tę przewagę że nie musimy ręcznie dostrajać współczynnika uczenia.
+\end{itemize}
 
 \subsection{Podsumowanie i wnioski z części klasyfikacyjnej}
-% TODO: Syntetyczne wnioski końcowe dotyczące klasyfikacji.
 
+\begin{itemize}
+    \item \textbf{Funkcja aktywacji}: Najlepsze rezultaty zapewnia funkcja \texttt{ReLU} (w połączeniu z inicjalizacją \texttt{He} - zgodnie z \cite{he_xavier_init}). Zabezpiecza ona model przed zanikaniem gradientu i gwarantuje najszybszą zbieżność w porównaniu do nasycającej funkcji funkcji \texttt{Sigmoid}.
+    \item \textbf{Architektura sieci}: Zwiększenie liczby warstw ukrytych przyspiesza proces uczenia i pozwala wyznaczać dokładniejsze granice decyzyjne. Najlepszym kompromisem pomiędzy rozmiarem sieci a dokładnością okazała się architektura 2-warstwowa ($[2, 32, 16]$) — dalsze pogłębianie modelu przynosiło niewielki zysk na zbiorze testowym.
+    \item \textbf{Funkcja straty}: Entropia krzyżowa (\texttt{Cross-Entropy}) jest lepszym wyborem niż \texttt{MSE} dla problemu klasyfikacji. Eliminuje problem nasycenia gradientu na wyjściu z aktywacją \texttt{Sigmoid} lub \texttt{Softmax}, co zapewnia szybkie i stabilne uczenie już przy małym kroku $\eta$.
+\end{itemize}
 
 % ==============================================================================
 % 5. PODSUMOWANIE OGÓLNE I WNIOSKI KOŃCOWE
