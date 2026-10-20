@@ -161,6 +161,7 @@ def run_experiment_r1(seeds: list[int] | None = None, n_samples: int = 1000) -> 
     for ds_name in dataset_names:
         print(f"\n--> Przetwarzanie zbioru: {ds_name} (N = {n_samples})...")
         dataset: RegressionDataset = load_regression_data(ds_name, n_samples=n_samples)
+        epochs = 150 if ds_name == "activation" else 1000
 
         layer_dims = [1, 32, 16, 1]
         layer_names = [
@@ -205,7 +206,7 @@ def run_experiment_r1(seeds: list[int] | None = None, n_samples: int = 1000) -> 
                     y_train=dataset.y_train,
                     loss_fn=loss_fn,
                     optimizer=optimizer,
-                    epochs=150,
+                    epochs=epochs,
                     batch_size=32,
                     validation_data=(dataset.x_test, dataset.y_test),
                     metrics={"mae": compute_mae, "r2": compute_r2},
@@ -285,7 +286,7 @@ def run_experiment_r1(seeds: list[int] | None = None, n_samples: int = 1000) -> 
         print(f"   [Wykres] Zapisano aproksymacje (zbior testowy): {test_plot_path.name}")
 
         # Plot 3: MSE loss curves with std dev band
-        epochs_range = np.arange(1, 151)
+        epochs_range = np.arange(1, epochs + 1)
         loss_plot_path = results_dir / f"r1_{ds_name}_loss_curves.png"
         plot_learning_curves_with_std(
             epochs=epochs_range,
@@ -371,7 +372,7 @@ def run_experiment_r1(seeds: list[int] | None = None, n_samples: int = 1000) -> 
 def run_experiment_r2(
     seeds: list[int] | None = None,
     n_samples: int = 1000,
-    epochs: int = 250,
+    epochs: int = 1000,
     lr: float = 0.0005,
     activation_cls: type = Tanh,
     init_method: str = "xavier",
@@ -385,7 +386,7 @@ def run_experiment_r2(
     Args:
         seeds: Random seeds for statistical evaluation. Defaults to [42, 123, 999].
         n_samples: Number of samples in dataset. Defaults to 1000.
-        epochs: Number of training epochs. Defaults to 250.
+        epochs: Number of training epochs. Defaults to 1000.
         lr: Learning rate for SGD optimizer. Defaults to 0.0005.
         activation_cls: Activation class for hidden layers. Defaults to Tanh.
         init_method: Weight initialization strategy. Defaults to "xavier".
@@ -994,7 +995,7 @@ def run_experiment_r3(
 def run_experiment_r4(
     seeds: list[int] | None = None,
     sample_sizes: list[int] | None = None,
-    epochs: int = 150,
+    epochs: int = 1000,
     lr: float = 0.001,
     activation_cls: type = Tanh,
     init_method: str = "xavier",
@@ -1008,7 +1009,7 @@ def run_experiment_r4(
     Args:
         seeds: Random seeds for statistical evaluation. Defaults to [42, 123, 999].
         sample_sizes: Training-set sizes to evaluate. Defaults to [100, 500, 1000, 10000].
-        epochs: Number of training epochs. Defaults to 150.
+        epochs: Number of training epochs. Defaults to 1000.
         lr: Learning rate for SGD optimizer. Defaults to 0.001.
         activation_cls: Activation class for hidden layers. Defaults to Tanh.
         init_method: Weight initialization strategy. Defaults to "xavier".
@@ -1281,19 +1282,25 @@ def main() -> None:
         "--epochs",
         type=int,
         default=150,
-        help="Liczba epok treningu dla R1, R3 i R4 (domyślnie: 150)",
+        help="Liczba epok treningu dla R3 (domyślnie: 150)",
     )
     parser.add_argument(
         "--r2-epochs",
         type=int,
-        default=250,
-        help="Liczba epok treningu dla R2 (domyślnie: 250)",
+        default=1000,
+        help="Liczba epok treningu dla R2 (domyślnie: 1000)",
     )
     parser.add_argument(
         "--r2-lr",
         type=float,
         default=0.0005,
         help="Współczynnik uczenia dla R2 (domyślnie: 0.0005)",
+    )
+    parser.add_argument(
+        "--r4-epochs",
+        type=int,
+        default=1000,
+        help="Liczba epok treningu dla R4 (domyślnie: 1000)",
     )
 
     args = parser.parse_args()
@@ -1309,7 +1316,7 @@ def main() -> None:
     elif args.experiment == "3":
         run_experiment_r3(n_samples=args.n_samples, epochs=args.epochs)
     elif args.experiment == "4":
-        run_experiment_r4(epochs=args.epochs)
+        run_experiment_r4(epochs=args.r4_epochs)
     elif args.experiment == "all":
         run_experiment_r1(n_samples=args.n_samples)
         run_experiment_r2(
@@ -1318,7 +1325,7 @@ def main() -> None:
             lr=args.r2_lr,
         )
         run_experiment_r3(n_samples=args.n_samples, epochs=args.epochs)
-        run_experiment_r4(epochs=args.epochs)
+        run_experiment_r4(epochs=args.r4_epochs)
 
 
 if __name__ == "__main__":

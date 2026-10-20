@@ -47,16 +47,15 @@
     \begin{minipage}[t]{0.48\textwidth}
         \flushleft
         \textbf{Autorzy:}\\[0.3em]
-        Jan Najowski\\
-        Stefan Stawicki
+        Krzysztof Radzewicz\\
+        Jakub Rak
     \end{minipage}
     \hfill
     \begin{minipage}[t]{0.48\textwidth}
         \flushright
         \textbf{Prowadzący:}\\[0.3em]
-        [Tytuł / Stopień, Imię i Nazwisko]
+        [mgr. inż. Mikołaj Małkiński]
     \end{minipage}
-    
     \vfill
     
     {\large Warszawa, \today \par}
@@ -108,28 +107,265 @@ oraz zmiany wartości kilku wybranych z góry wag sieci.
 \section{Eksperymenty — Zagadnienie regresji}
 
 \subsection{Zbiory danych i metodyka badawcza}
-% TODO: Opisz charakterystykę badanych zbiorów danych (data.activation, data.cube).
-% - Zakresy wartości cech i celów, zastosowany preprocessing (np. standaryzacja z-score).
-% - Dobór warstwy wyjściowej (aktywacja liniowa / brak aktywacji).
+Badania przeprowadzono dla dwóch jednowymiarowych zbiorów regresyjnych. W obu przypadkach wejście stanowi pojedyncza cecha ciągła, a zakres zbioru uczącego wynosi $x \in [-2,5]$; model przewiduje jedną wartość rzeczywistą $\hat{y}$.
+\begin{itemize}
+    \item \textbf{Zbiór \texttt{data.activation}} opisuje nieliniową funkcję o kształcie sigmoidalnym/przejściowym. Wartości celu w obszarze uczącym mieszczą się w przybliżeniu w zakresie $[-265,-2]$.
+    \item \textbf{Zbiór \texttt{data.cube}} zawiera zależność wielomianową trzeciego stopnia z szumem, a wartości celu w obszarze uczącym znajdują się w przybliżeniu w zakresie $[-198,86]$.
+\end{itemize}
+Wykorzystano gotowe podziały na zbiory uczące i testowe, dostępne dla liczności $N \in \{100,500,1000,10000\}$. Dane w eksperymentach pozostawiono w oryginalnej skali — nie zastosowano standaryzacji ani normalizacji. Jest to istotne, ponieważ duży zakres wartości celu wpływa na skalę gradientów i wrażliwość uczenia na współczynnik $\eta$.
+Warstwa wyjściowa składała się z jednego neuronu z aktywacją tożsamościową (bez dodatkowej nieliniowości), dzięki czemu model mógł przewidywać wartości z dowolnego zakresu. Domyślnie stosowano bias. Jakość mierzono przez MSE, MAE i współczynnik determinacji $R^2$; wartości w tabelach są średnimi z trzech przebiegów dla ziaren $42$, $123$ i $999$, o ile nie zaznaczono inaczej. Liczbę epok zwiększono do 1000 w tych eksperymentach, w których krzywe błędu nadal opadały przy poprzednim limicie. Wyjątkiem jest R1 dla \texttt{activation} (150 epok, gdzie strata szybko osiąga plateau) oraz R3 (150 epok, gdzie większe kroki uczenia wykazywały niestabilność).
+
+Na rysunkach krzywe modelu naniesiono na punkty odpowiednich podzbiorów. W eksperymentach architektonicznych i dotyczących funkcji straty podział testowy obejmuje zakresy poza przedziałem uczącym, dlatego ocenia nie tylko interpolację, lecz także ekstrapolację. Szczególnie wyraźnie widać to dla \texttt{data.cube}, którego wielomian rośnie gwałtownie poza obszarem danych uczących.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.88\textwidth]{../experiments/results/regression/dataset_activation_1000.png}
+    \caption{Zbiory uczący i testowy dla \texttt{data.activation} ($N=1000$).}
+    \label{fig:reg_dataset_activation}
+\end{figure}
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.88\textwidth]{../experiments/results/regression/dataset_cube_1000.png}
+    \caption{Zbiory uczący i testowy dla \texttt{data.cube} ($N=1000$). Widoczny jest wzrost wartości funkcji poza zakresem uczącym.}
+    \label{fig:reg_dataset_cube}
+\end{figure}
 
 \subsection{Wpływ funkcji aktywacji w warstwach ukrytych}
-% TODO: Porównaj działanie badanych funkcji aktywacji (np. Sigmoid, Tanh, ReLU).
-% - Umieść wykresy i tabele według potrzeb.
-% - Wnioski: gładkość krzywej aproksymacji, tempo zbieżności błędu, zachowanie wag.
+W eksperymencie R1 porównano funkcje \texttt{Sigmoid}, \texttt{Tanh} i \texttt{ReLU} w architekturze $[1,32,16,1]$. Warianty dla \texttt{data.activation} uczono przez 150 epok, natomiast dla \texttt{data.cube} liczbę epok zwiększono do 1000, ponieważ strata testowa nadal malała przy poprzednim limicie. W obu przypadkach stosowano mini batch o rozmiarze 32 i współczynnik uczenia $\eta=0.001$. Dla \texttt{Sigmoid} i \texttt{Tanh} zastosowano inicjalizację Xavier, a dla \texttt{ReLU} — He.
+
+\begin{table}[H]
+    \centering
+    \caption{Wyniki eksperymentu R1 na zbiorze testowym: średnia $\pm$ odchylenie standardowe z trzech ziaren.}
+    \label{tab:r1_regression}
+    \begin{tabular}{llrrr}
+        \toprule
+        \textbf{Zbiór} & \textbf{Aktywacja} & \textbf{MSE} & \textbf{MAE} & \textbf{$R^2$} \\
+        \midrule
+        \texttt{activation} & Sigmoid & $191.66 \pm 1.42$ & $7.87 \pm 0.04$ & $0.9867$ \\
+                             & Tanh    & $199.12 \pm 0.15$ & $7.18 \pm 0.12$ & $0.9862$ \\
+                             & ReLU    & $756.57 \pm 235.07$ & $15.62 \pm 6.55$ & $0.9476$ \\
+        \midrule
+        \texttt{cube}       & Sigmoid & $76668.59 \pm 488.48$ & $137.26 \pm 0.93$ & $0.3672$ \\
+                             & Tanh    & $77887.78 \pm 1142.43$ & $135.32 \pm 1.58$ & $0.3572$ \\
+                             & ReLU    & $102872.31 \pm 56930.40$ & $177.66 \pm 66.49$ & $0.1510$ \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+Na \texttt{data.activation} wszystkie trzy warianty dobrze odtworzyły przebieg w obszarze uczącym. Na zbiorze testowym najlepszą wartość MSE uzyskał \texttt{Sigmoid} ($191.66$), a najniższe MAE — \texttt{Tanh} ($7.18$); wyniki tych dwóch gładkich funkcji były zbliżone. \texttt{ReLU} osiągnęła większy błąd i wyraźnie większą zmienność pomiędzy ziarnami. Krzywa \texttt{ReLU} jest odcinkami liniowa, natomiast \texttt{Sigmoid} i \texttt{Tanh} dają gładkie przejście. Różnice są szczególnie widoczne poza zakresem uczącym: aktywacje gładkie zbliżają się do stałych wartości, a \texttt{ReLU} kontynuuje ekstrapolację liniową.
+
+Wyniki dla \texttt{data.cube} po 1000 epokach nadal są słabe na zbiorze testowym, ponieważ podział wymaga ekstrapolacji szybko rosnącego wielomianu. Najniższy średni testowy MSE uzyskał \texttt{Sigmoid} ($\approx 76669$), niewiele niższy niż \texttt{Tanh} ($\approx 77888$). Wynik \texttt{ReLU} pogorszył się względem przebiegu 150-epokowego, a odchylenie standardowe wzrosło do około $56930$; trajektorie wskazują na niestabilność części uruchomień. To przykład, że samo zwiększenie budżetu epok nie gwarantuje poprawy generalizacji. Aktywacje \texttt{Sigmoid} i \texttt{Tanh} spłaszczają predykcję poza zakresem uczącym, nie odwzorowując nieograniczonego wzrostu wielomianu.
+
+Rysunek~\ref{fig:r1_weights} przedstawia przebieg wagi $w_{0,0}$ (linia ciągła) i biasu $b_0$ (linia przerywana) pierwszego neuronu w każdej warstwie dla reprezentatywnego ziarna $42$. W przypadku \texttt{cube} widoczna jest duża zmienność parametrów wariantu \texttt{ReLU}, zgodna z wysokim odchyleniem standardowym wyniku testowego po 1000 epokach.
+
+\begin{figure}[H]
+    \centering
+    \begin{subfigure}[t]{0.49\textwidth}
+        \centering
+        \includegraphics[width=\linewidth]{../experiments/results/regression/r1_activation_neuron_weights.png}
+        \caption{\texttt{data.activation} (150 epok).}
+        \label{fig:r1_weights_activation}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[t]{0.49\textwidth}
+        \centering
+        \includegraphics[width=\linewidth]{../experiments/results/regression/r1_cube_neuron_weights.png}
+        \caption{\texttt{data.cube} (1000 epok).}
+        \label{fig:r1_weights_cube}
+    \end{subfigure}
+    \caption{Ewolucja wagi wejściowej i biasu pierwszego neuronu w kolejnych warstwach sieci R1 dla funkcji aktywacji Sigmoid, Tanh i ReLU (ziarno 42).}
+    \label{fig:r1_weights}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.96\textwidth]{../experiments/results/regression/r1_activation_approximation_test.png}
+    \caption{Aproksymacja \texttt{data.activation} na zbiorze testowym dla trzech funkcji aktywacji. Linie przerywane wyznaczają zakres uczący; poza nim widoczne są odmienne zachowania ekstrapolacyjne.}
+    \label{fig:r1_activation_approx}
+\end{figure}
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.96\textwidth]{../experiments/results/regression/r1_cube_approximation_test.png}
+    \caption{Aproksymacja \texttt{data.cube} na zbiorze testowym dla trzech funkcji aktywacji. Żadna z krzywych nie odtwarza dobrze wzrostu wielomianu poza zakresem uczącym.}
+    \label{fig:r1_cube_approx}
+\end{figure}
 
 \subsection{Wpływ architektury sieci: głębokość i szerokość}
-% TODO: Zbadaj wpływ liczby warstw ukrytych (od 0 do 4) oraz liczby neuronów w warstwach.
-% - Wnioski: pojemność aproksymacyjna modelu, ryzyko przeuczenia/niedouczenia.
+W eksperymencie R2 sprawdzono osiem architektur: model bez warstwy ukrytej $[1,1]$, sieci z jedną warstwą o szerokości 4, 16 lub 64 neuronów, dwie wariacje z dwiema warstwami oraz sieci z trzema i czterema warstwami ukrytymi. Pozostałe warunki ustalono: aktywacja ukryta \texttt{Tanh}, inicjalizacja Xavier, MSE, mini batch 32, 1000 epok oraz $\eta=0.0005$. Poniższe wartości to średnie testowe z trzech ziaren.
+
+\begin{table}[H]
+    \centering
+    \caption{Średni testowy MSE i $R^2$ w zależności od architektury (eksperyment R2, $N=1000$).}
+    \label{tab:r2_regression}
+    \begin{tabular}{lrrrr}
+        \toprule
+        & \multicolumn{2}{c}{\textbf{\texttt{data.activation}}} & \multicolumn{2}{c}{\textbf{\texttt{data.cube}}} \\
+        \cmidrule(lr){2-3} \cmidrule(lr){4-5}
+        \textbf{Architektura} & \textbf{MSE} & \textbf{$R^2$} & \textbf{MSE} & \textbf{$R^2$} \\
+        \midrule
+        $[1,1]$ (0 ukrytych)             & 2437.11 & 0.831 & 93426.16 & 0.229 \\
+        $[1,4,1]$                         & 210.89  & 0.985 & 81433.92 & 0.328 \\
+        $[1,16,1]$                        & 131.43  & 0.991 & 73277.09 & 0.395 \\
+        $[1,64,1]$                        & 45.31   & 0.997 & 65607.87 & 0.459 \\
+        $[1,16,8,1]$                      & 178.02  & 0.988 & 78744.20 & 0.350 \\
+        $[1,32,16,1]$                     & 145.61  & 0.990 & 76083.64 & 0.372 \\
+        $[1,32,16,8,1]$                   & 197.64  & 0.986 & 78432.35 & 0.353 \\
+        $[1,64,32,16,8,1]$                & 194.35  & 0.987 & 78639.15 & 0.351 \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+Po wydłużeniu treningu do 1000 epok najlepszy w obu zbiorach był szeroki, jednowarstwowy model $[1,64,1]$: uzyskał MSE $45.31$ dla \texttt{data.activation} i $65607.87$ dla \texttt{data.cube}. Dodatkowa głębokość nie poprawiła wyników w porównaniu z tym wariantem. Wartości dla \texttt{cube} pozostają wysokie ze względu na ekstrapolację.
+
+Na Rysunku~\ref{fig:r2_weights} pokazano zmianę $w_{0,0}$ i $b_0$ pierwszego neuronu warstwy ukrytej dla sieci z jedną, dwiema i czterema warstwami ukrytymi. Krzywe dotyczą ziarna $42$; porównanie parametrów ma charakter ilustracyjny, ponieważ neuron o tym samym indeksie w różnych architekturach nie musi pełnić tej samej funkcji.
+
+\begin{figure}[H]
+    \centering
+    \begin{subfigure}[t]{0.49\textwidth}
+        \centering
+        \includegraphics[width=\linewidth]{../experiments/results/regression/r2_activation_neuron_weights.png}
+        \caption{\texttt{data.activation}.}
+        \label{fig:r2_weights_activation}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[t]{0.49\textwidth}
+        \centering
+        \includegraphics[width=\linewidth]{../experiments/results/regression/r2_cube_neuron_weights.png}
+        \caption{\texttt{data.cube}.}
+        \label{fig:r2_weights_cube}
+    \end{subfigure}
+    \caption{Ewolucja wagi $w_{0,0}$ i biasu $b_0$ pierwszego neuronu pierwszej warstwy ukrytej dla architektur o różnej głębokości w eksperymencie R2 (ziarno 42, 1000 epok).}
+    \label{fig:r2_weights}
+\end{figure}
+
+Wartości treningowe były znacznie niższe od testowych, szczególnie dla \texttt{data.cube}. Rozbieżność ta jest zgodna z faktem, że test ocenia ekstrapolację, a nie wyłącznie interpolację. Nie należy jej zatem interpretować wyłącznie jako klasycznego przeuczenia do punktów treningowych. Przykładowe krzywe predykcji dla wszystkich architektur na zbiorze testowym przedstawia Rysunek~\ref{fig:r2_cube_approx}.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{../experiments/results/regression/r2_cube_approximation_test.png}
+    \caption{Wpływ głębokości i szerokości sieci na ekstrapolację \texttt{data.cube} (reprezentatywne ziarno 42).}
+    \label{fig:r2_cube_approx}
+\end{figure}
 
 \subsection{Wpływ miary błędu (funkcji straty)}
-% TODO: Porównaj optymalizację przy użyciu błędu średniokwadratowego (MSE) oraz bezwzględnego (MAE).
-% - Wnioski: dynamika gradientu, stabilność parametrów w sąsiedztwie minimum.
+W eksperymencie R3 porównano minimalizację MSE i MAE w tej samej architekturze $[1,32,16,1]$ z aktywacją \texttt{Tanh}. Ponieważ MAE ma gradient o w przybliżeniu stałym module, a gradient MSE zależy od wielkości reszty, dla obu funkcji sprawdzono trzy współczynniki uczenia ($0.001$, $0.005$ i $0.01$). Każdy wariant trenowano przez 150 epok. Końcowe MSE i MAE obliczano tak samo niezależnie od optymalizowanej funkcji straty.
+
+\begin{table}[H]
+    \centering
+    \caption{Porównanie najlepszych testowych konfiguracji MSE i MAE według testowego MSE (średnia z trzech ziaren).}
+    \label{tab:r3_regression}
+    \begin{tabular}{llrrr}
+        \toprule
+        \textbf{Zbiór} & \textbf{Minimalizowana strata} & $\boldsymbol{\eta}$ & \textbf{Testowy MSE} & \textbf{Testowy MAE} \\
+        \midrule
+        \texttt{activation} & MSE & 0.001 & 199.12 & 7.18 \\
+        \texttt{activation} & MAE & 0.010 & 878.20 & 17.57 \\
+        \texttt{cube}       & MSE & 0.010 & 81926.54 & 160.09 \\
+        \texttt{cube}       & MAE & 0.010 & 97470.71 & 161.91 \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+W badanym zakresie parametrów optymalizacja MSE dała najlepsze wyniki na obu zbiorach. Dla \texttt{data.activation} MSE przy $\eta=0.001$ osiągnęło testowy MSE $199.12$, podczas gdy najlepszy wariant MAE (według tego samego kryterium) uzyskał $878.20$. Dla \texttt{data.cube} MSE przy $\eta=0.01$ uzyskało testowy MSE $81926.54$, a najlepszy wariant MAE — $97470.71$. Wysokie błędy \texttt{cube} przypominają, że podział testowy obejmuje ekstrapolację.
+
+Krzywe uczenia pokazują, że porównanie zależy od kroku uczenia. Przy małym $\eta$ MAE poprawiało się powoli, natomiast większy krok przyspieszał spadek błędu bezwzględnego. MSE reagowało silniej na duże reszty, lecz większe kroki powodowały niestabilniejsze przebiegi i gorsze wyniki końcowe. W otoczeniu minimum stały moduł gradientu MAE może utrudniać dokładne ustalenie parametrów i prowadzić do oscylacji; MSE daje coraz mniejsze korekty wraz ze zmniejszaniem reszty. Wyniki te dotyczą przetestowanych konfiguracji i nie oznaczają, że MAE jest ogólnie gorszą miarą — funkcja straty i tempo uczenia powinny być dobierane wspólnie.
+
+Rysunek~\ref{fig:r3_weights} pokazuje ewolucję wagi $w_{0,0}$ i biasu $b_0$ pierwszego neuronu w pierwszej warstwie ukrytej. Osobne panele odpowiadają optymalizowanej stracie i wartości współczynnika uczenia; przedstawiono reprezentatywne ziarno $42$.
+
+\begin{figure}[H]
+    \centering
+    \begin{subfigure}[t]{0.49\textwidth}
+        \centering
+        \includegraphics[width=\linewidth]{../experiments/results/regression/r3_activation_neuron_weights_grid.png}
+        \caption{\texttt{data.activation}.}
+        \label{fig:r3_weights_activation}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[t]{0.49\textwidth}
+        \centering
+        \includegraphics[width=\linewidth]{../experiments/results/regression/r3_cube_neuron_weights_grid.png}
+        \caption{\texttt{data.cube}.}
+        \label{fig:r3_weights_cube}
+    \end{subfigure}
+    \caption{Trajektorie wagi $w_{0,0}$ i biasu $b_0$ podczas optymalizacji MSE i MAE dla trzech wartości współczynnika uczenia (R3, ziarno 42, 150 epok).}
+    \label{fig:r3_weights}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{../experiments/results/regression/r3_cube_mae_curves.png}
+    \caption{Przebieg MAE na zbiorach uczącym i testowym dla optymalizacji MSE oraz MAE na \texttt{data.cube}, przy trzech wartościach współczynnika uczenia.}
+    \label{fig:r3_cube_curves}
+\end{figure}
 
 \subsection{Wpływ rozmiaru zbioru danych (opcjonalnie)}
-% TODO: Analiza wpływu liczności próby treningowej (N = 100, 500, 1000, 10000) na generalizację.
+W eksperymencie R4 zbadano wpływ liczności zbioru uczącego $N \in \{100,500,1000,10000\}$. Dla każdej liczności użyto architektury $[1,32,16,1]$, aktywacji \texttt{Tanh}, inicjalizacji Xavier, straty MSE, $\eta=0.001$ i 1000 epok. Wyniki są średnimi z trzech ziaren.
+
+\begin{table}[H]
+    \centering
+    \caption{Testowy MSE w zależności od liczności zbioru uczącego (średnia $\pm$ odchylenie standardowe).}
+    \label{tab:r4_regression}
+    \begin{tabular}{rcc}
+        \toprule
+        \textbf{$N$} & \textbf{\texttt{data.activation}} & \textbf{\texttt{data.cube}} \\
+        \midrule
+        100   & $513.29 \pm 221.95$ & $90472.77 \pm 2754.45$ \\
+        500   & $141.94 \pm 1.62$   & $76553.55 \pm 289.43$ \\
+        1000  & $143.84 \pm 6.20$   & $77887.78 \pm 1142.43$ \\
+        10000 & $243.46 \pm 46.15$  & $73660.82 \pm 563.96$ \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+Po 1000 epokach nie zaobserwowano monotonicznej poprawy wraz ze wzrostem $N$. Dla \texttt{data.activation} najniższy testowy MSE uzyskano przy $N=500$--$1000$; przy $N=10000$ błąd wzrósł do $243.46$, mimo bardzo małego błędu treningowego ($0.011$). Jest to oznaka pogorszenia generalizacji przy dłuższym treningu w tym ustawieniu. Dla \texttt{data.cube} większa próbka nadal pomagała ogólnie, ale wahania między $N=500$ i $N=1000$ pozostały. Testowy MSE wynosił $73660.82$ dla $N=10000$, a luka między błędem treningowym i testowym była duża.
+
+Wykresy wagi $w_{0,0}$ i biasu $b_0$ w R4 (Rysunek~\ref{fig:r4_weights}) pokazują ich przebieg dla poszczególnych liczności zbioru uczącego. Są to parametry pierwszego neuronu każdej kolejnej warstwy dla reprezentatywnego ziarna $42$.
+
+\begin{figure}[H]
+    \centering
+    \begin{subfigure}[t]{0.49\textwidth}
+        \centering
+        \includegraphics[width=\linewidth]{../experiments/results/regression/r4_activation_neuron_weights.png}
+        \caption{\texttt{data.activation}.}
+        \label{fig:r4_weights_activation}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[t]{0.49\textwidth}
+        \centering
+        \includegraphics[width=\linewidth]{../experiments/results/regression/r4_cube_neuron_weights.png}
+        \caption{\texttt{data.cube}.}
+        \label{fig:r4_weights_cube}
+    \end{subfigure}
+    \caption{Ewolucja wagi $w_{0,0}$ i biasu $b_0$ w kolejnych warstwach sieci R4 dla różnych liczności zbioru treningowego (ziarno 42, 1000 epok).}
+    \label{fig:r4_weights}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \begin{subfigure}{0.49\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{../experiments/results/regression/r4_activation_generalization_curve.png}
+        \caption{\texttt{data.activation}}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}{0.49\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{../experiments/results/regression/r4_cube_generalization_curve.png}
+        \caption{\texttt{data.cube}}
+    \end{subfigure}
+    \caption{Błąd MSE na zbiorach uczących i testowych w zależności od liczności próby $N$. Wstęgi przedstawiają odchylenie standardowe dla trzech ziaren.}
+    \label{fig:r4_generalization}
+\end{figure}
 
 \subsection{Podsumowanie i wnioski z części regresyjnej}
-% TODO: Syntetyczne wnioski końcowe dotyczące regresji.
+Przeprowadzone eksperymenty pokazują, że wynik regresji MLP zależy łącznie od charakteru aproksymowanej funkcji, funkcji aktywacji, szerokości sieci, liczby próbek oraz współczynnika uczenia.
+\begin{itemize}
+    \item Dla gładkiej funkcji \texttt{activation} aktywacje \texttt{Sigmoid} i \texttt{Tanh} zapewniły wysoką jakość aproksymacji, a poszerzenie jednej warstwy ukrytej z 4 do 64 neuronów znacząco obniżyło błąd. W badanych ustawieniach dodawanie kolejnych warstw nie przyniosło poprawy.
+    \item Dla wielomianowego \texttt{cube} dobre dopasowanie w obszarze uczącym nie przełożyło się na ekstrapolację. Modele zwracały znacznie zaniżone predykcje poza przedziałem treningowym, co skutkowało wysokim błędem testowym i niskim $R^2$. Jest to ograniczenie testowanych modeli i konfiguracji, nie zaś dowód, że sieć MLP nie może aproksymować wielomianu w obszarze interpolacji.
+    \item MSE osiągnęło najlepsze wyniki w porównaniu z MAE przy sprawdzonych współczynnikach uczenia. Eksperyment wskazał jednocześnie, że ocenę funkcji straty należy prowadzić wraz z dostrojeniem kroku uczenia.
+    \item Zwiększenie liczby epok poprawiło część wyników (zwłaszcza w R2), ale nie wszystkie: w R1 wariant \texttt{ReLU} dla \texttt{cube} stał się niestabilny, a w R4 przy $N=10000$ testowy MSE dla \texttt{activation} wzrósł. Liczba epok powinna zatem być dobierana na podstawie niezależnego zbioru walidacyjnego, a nie traktowana jako parametr, którego wzrost zawsze poprawia jakość.
+    \item Dane wykorzystano w surowej skali, zgodnie z implementacją eksperymentów. Standaryzacja cech i celów — wyznaczana na zbiorze uczącym i stosowana następnie do testowego — mogłaby ułatwić dobór współczynnika uczenia. Nie zmieniłaby jednak faktu, że zachowanie modelu daleko poza zakresem obserwacji wymaga osobnej oceny.
+\end{itemize}
 
 
 % ==============================================================================
