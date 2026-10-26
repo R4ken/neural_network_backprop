@@ -29,6 +29,7 @@ class MLP:
             layers: Optional initial list of layers (defaults to an empty network).
         """
         self.layers: list[Layer] = list(layers) if layers is not None else []
+        self._last_output_delta: FloatArray | None = None
 
     @classmethod
     def from_dimensions(
@@ -103,8 +104,15 @@ class MLP:
             The gradient with respect to the network inputs.
         """
         grad = grad_output
-        for layer in reversed(self.layers):
+        self._last_output_delta = None
+        for i, layer in enumerate(reversed(self.layers)):
             grad = layer.backward(grad)
+            if i == 0 and isinstance(self.layers[-1], Activation):
+                self._last_output_delta = grad
+
+        if self._last_output_delta is None:
+            self._last_output_delta = grad_output
+
         return grad
 
     def train_step(
@@ -174,6 +182,7 @@ class MLP:
             "iteration_loss": [],
             "weight_norms": [],
             "weight_update_norms": [],
+            "output_gradient_norms": [],
             "tracked_neuron_weights": [],
         }
         if validation_data is not None:
@@ -191,6 +200,7 @@ class MLP:
         for epoch in range(1, epochs + 1):
             epoch_loss_sum = 0.0
             total_samples = 0
+            epoch_batch_grad_norms: list[float] = []
 
             for x_batch, y_batch in batch_iterator(
                 x_train, y_train, batch_size=batch_size, shuffle=True
@@ -202,8 +212,18 @@ class MLP:
                 epoch_loss_sum += batch_loss * batch_len
                 total_samples += batch_len
 
+                if self._last_output_delta is not None:
+                    sample_deltas = self._last_output_delta * batch_len
+                    batch_grad_norm = float(np.mean(np.linalg.norm(sample_deltas, axis=-1)))
+                    epoch_batch_grad_norms.append(batch_grad_norm)
+
             epoch_loss = float(epoch_loss_sum / total_samples) if total_samples > 0 else 0.0
             history["loss"].append(epoch_loss)
+
+            epoch_grad_norm = (
+                float(np.mean(epoch_batch_grad_norms)) if epoch_batch_grad_norms else 0.0
+            )
+            history["output_gradient_norms"].append(epoch_grad_norm)
 
             epoch_norms = [
                 float(np.linalg.norm(layer.W))

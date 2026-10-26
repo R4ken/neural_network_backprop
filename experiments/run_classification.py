@@ -58,6 +58,8 @@ from src.py_nn1 import (
     set_seed,
 )
 
+SEEDS = [42, 123, 999, 2137, 332, 5672, 21, 420, 9, 10]
+
 
 def _get_results_dir() -> Path:
     """Returns and ensures the results directory for classification experiments."""
@@ -79,7 +81,7 @@ def run_experiment_k1(seeds: list[int] | None = None, n_samples: int = 100) -> N
     epochs = 150
 
     if seeds is None:
-        seeds = [42, 123, 999]
+        seeds = SEEDS
 
     results_dir = _get_results_dir()
     print("=" * 70)
@@ -308,7 +310,7 @@ def run_experiment_k2(
         init_method: Weight initialization strategy. Defaults to "he".
     """
     if seeds is None:
-        seeds = [42, 123, 999]
+        seeds = SEEDS
 
     results_dir = _get_results_dir()
     act_name = activation_cls.__name__
@@ -663,7 +665,7 @@ def run_experiment_k3(
         learning_rates: List of learning rates to evaluate. Defaults to [0.01, 0.05, 0.2].
     """
     if seeds is None:
-        seeds = [42, 123, 999]
+        seeds = SEEDS
     if learning_rates is None:
         learning_rates = [0.01, 0.05, 0.2]
 
@@ -775,11 +777,10 @@ def run_experiment_k3(
                     loss_by_fn[loss_name][lr]["test"].append(history["val_loss"])
 
                     # Compute total Frobenius norm of weight updates per epoch: sqrt(sum(||Delta W_l||^2))
-                    total_updates = [
-                        float(np.sqrt(sum(u**2 for u in epoch_updates)))
-                        for epoch_updates in history["weight_update_norms"]
+                    output_grad_norms = [
+                        float(gn) for gn in history["output_gradient_norms"]
                     ]
-                    updates_by_lr[lr][loss_name].append(total_updates)
+                    updates_by_lr[lr][loss_name].append(output_grad_norms)
 
                     final_tr_accs.append(history["acc"][-1])
                     final_te_accs.append(history["val_acc"][-1])
@@ -788,7 +789,7 @@ def run_experiment_k3(
 
                     # Save representative seed (seeds[0] = 42)
                     if seed == seeds[0]:
-                        model_label = f"{loss_name} (lr = {lr})"
+                        model_label = f"{loss_name} ($\\eta = {lr}$)"
                         rep_models[model_label] = model
                         rep_neuron_trajectories_grid[loss_name][lr] = history["tracked_neuron_weights"]
 
@@ -832,7 +833,7 @@ def run_experiment_k3(
             is_binary=is_binary,
             nrows=2,
             ncols=3,
-            title=f"Granice decyzyjne w zależności od funkcji straty i lr: {ds_name} (Zbiór testowy, N = {len(dataset.x_test)})",
+            title=f"Granice decyzyjne w zależności od funkcji straty i $\\eta$: {ds_name} (Zbiór testowy, N = {len(dataset.x_test)})",
         )
         print(f"   [Wykres 1/5] Zapisano granice decyzyjne: {boundary_path.name}")
 
@@ -841,7 +842,7 @@ def run_experiment_k3(
         plot_k3_accuracy_curves(
             epochs=epochs_range,
             acc_by_lr=acc_by_lr,
-            title=f"Dokładność klasyfikacji: Cross-Entropy vs MSE w zależności od lr: {ds_name} (Średnia z {len(seeds)} ziaren)",
+            title=f"Dokładność klasyfikacji: Cross-Entropy vs MSE w zależności od $\\eta$: {ds_name} (Średnia z {len(seeds)} ziaren)",
             save_path=acc_plot_path,
         )
         print(f"   [Wykres 2/5] Zapisano krzywe dokładności: {acc_plot_path.name}")
@@ -851,7 +852,7 @@ def run_experiment_k3(
         plot_k3_loss_curves_split(
             epochs=epochs_range,
             loss_by_fn=loss_by_fn,
-            title=f"Przebieg funkcji straty: Cross-Entropy vs MSE dla badanych lr: {ds_name} (Średnia z {len(seeds)} ziaren)",
+            title=f"Przebieg funkcji straty: Cross-Entropy vs MSE dla badanych $\\eta$: {ds_name} (Średnia z {len(seeds)} ziaren)",
             save_path=loss_plot_path,
         )
         print(f"   [Wykres 3/5] Zapisano krzywe strat (rozdzielone skale): {loss_plot_path.name}")
@@ -861,17 +862,17 @@ def run_experiment_k3(
         plot_k3_weight_update_dynamics(
             epochs=epochs_range,
             updates_by_lr=updates_by_lr,
-            title=f"Dynamika aktualizacji wag w kolejnych epokach (Cross-Entropy vs MSE): {ds_name}",
+            title=(r"Dynamika normy sygnału błędu wyjścia $\|\boldsymbol{\delta}^{[L]}\|$" f" (skala logarytmiczna): {ds_name}"),
             save_path=dyn_plot_path,
         )
-        print(f"   [Wykres 4/5] Zapisano dynamikę aktualizacji wag: {dyn_plot_path.name}")
+        print(f"   [Wykres 4/5] Zapisano dynamikę sygnału błędu: {dyn_plot_path.name}")
 
         # Plot 5: Neuron trajectories 2x3 grid
         neuron_plot_path = results_dir / f"k3_{ds_name}_neuron_weights_grid.png"
         plot_k3_neuron_weights_grid_2x3(
             epochs=epochs_range,
             trajectories_grid=rep_neuron_trajectories_grid,
-            title=f"Ewolucja wagi i biasu pierwszego neuronu w warstwie 1 (siatka 2x3): {ds_name} (Ziarno: {seeds[0]})",
+            title=f"Ewolucja wagi $w_{{0,0}}$ i biasu $b_0$ pierwszego neuronu w warstwie 1 (siatka 2x3): {ds_name} (Ziarno: {seeds[0]})",
             save_path=neuron_plot_path,
         )
         print(f"   [Wykres 5/5] Zapisano ewolucję neuronu (2x3): {neuron_plot_path.name}")

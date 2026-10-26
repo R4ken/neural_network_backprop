@@ -979,7 +979,7 @@ def plot_k3_accuracy_curves(
                 alpha=0.75,
             )
 
-        ax.set_title(f"Współczynnik uczenia lr = {lr}", fontsize=11.5, fontweight="bold")
+        ax.set_title(f"Współczynnik uczenia $\\eta = {lr}$", fontsize=11.5, fontweight="bold")
         ax.set_xlabel("Epoka", fontsize=10.5)
         ax.set_ylabel("Dokładność (Accuracy) [%]", fontsize=10.5)
         ax.grid(True, linestyle="--", alpha=0.5)
@@ -1033,7 +1033,7 @@ def plot_k3_loss_curves_split(
             tr_runs = np.array(splits["train"], dtype=float)
             tr_mean = np.mean(tr_runs, axis=0)
 
-            ax.plot(epochs, te_mean, label=f"lr = {lr} (Test)", color=color, linewidth=2.0)
+            ax.plot(epochs, te_mean, label=f"$\\eta = {lr}$ (Test)", color=color, linewidth=2.0)
             ax.fill_between(
                 epochs,
                 te_mean - te_std,
@@ -1044,7 +1044,7 @@ def plot_k3_loss_curves_split(
             ax.plot(
                 epochs,
                 tr_mean,
-                label=f"lr = {lr} (Trening)",
+                label=f"$\\eta = {lr}$ (Trening)",
                 color=color,
                 linestyle="--",
                 linewidth=1.3,
@@ -1070,13 +1070,13 @@ def plot_k3_weight_update_dynamics(
     title: str,
     save_path: Path | str,
 ) -> Path:
-    """Plots weight update Frobenius norms ||Delta W|| across epochs comparing CE and MSE.
+    """Plots output gradient error signal norms ||delta_out|| across epochs comparing CE and MSE on a log scale.
 
     Layout: 1x3 subplots for the tested learning rates.
 
     Args:
         epochs: Sequence of epoch indices (1 to E).
-        updates_by_lr: Dict of {lr: {loss_fn_name: [runs_of_total_norm_per_epoch]}}.
+        updates_by_lr: Dict of {lr: {loss_fn_name: [runs_of_output_grad_norms_per_epoch]}}.
         title: Main figure title in Polish.
         save_path: Destination file path.
 
@@ -1103,18 +1103,21 @@ def plot_k3_weight_update_dynamics(
             std_vals = np.std(arr, axis=0)
 
             ax.plot(epochs, mean_vals, label=fn_name, color=c, linewidth=2.0)
+            lower = np.maximum(mean_vals - std_vals, 1e-7)
+            upper = mean_vals + std_vals
             ax.fill_between(
                 epochs,
-                mean_vals - std_vals,
-                mean_vals + std_vals,
+                lower,
+                upper,
                 color=c,
                 alpha=0.18,
             )
 
-        ax.set_title(f"Współczynnik uczenia lr = {lr}", fontsize=11.5, fontweight="bold")
+        ax.set_yscale("log")
+        ax.set_title(f"Współczynnik uczenia $\\eta = {lr}$", fontsize=11.5, fontweight="bold")
         ax.set_xlabel("Epoka", fontsize=10.5)
-        ax.set_ylabel(r"Norma skoku wag $\|\Delta W\|_F$", fontsize=10.5)
-        ax.grid(True, linestyle="--", alpha=0.5)
+        ax.set_ylabel(r"Norma sygnału błędu $\|\boldsymbol{\delta}^{[L]}\|$ (skala logarytmiczna)", fontsize=10.5)
+        ax.grid(True, which="both", linestyle="--", alpha=0.5)
         ax.legend(title="Funkcja straty", loc="upper right", fontsize=9.5)
 
     fig.suptitle(title, fontsize=13, fontweight="bold")
@@ -1195,7 +1198,7 @@ def plot_k3_neuron_weights_grid_2x3(
                     linewidth=1.8,
                 )
 
-            ax.set_title(f"{loss_name} | lr = {lr}", fontsize=11, fontweight="bold")
+            ax.set_title(f"{loss_name} | $\\eta = {lr}$", fontsize=11, fontweight="bold")
             ax.set_xlabel("Epoka", fontsize=10)
             ax.set_ylabel("Wartość parametru", fontsize=10)
             ax.grid(True, linestyle="--", alpha=0.5)

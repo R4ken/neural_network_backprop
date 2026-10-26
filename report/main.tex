@@ -37,7 +37,7 @@
     
     \vspace{3.0cm}
     
-    {\huge\bfseries Projekt 1: Klasyfikacja i regresja\\[0.3em]z użyciem perceptronu\par}
+    {\huge\bfseries Projekt 1: Klasyfikacja i regresja\\[0.3em]z użyciem wielowarstwowego perceptronu\par}
     
     \vspace{1.0cm}
     {\Large\itshape Przedmiot: Sieci Neuronowe \par}
@@ -47,14 +47,14 @@
     \begin{minipage}[t]{0.48\textwidth}
         \flushleft
         \textbf{Autorzy:}\\[0.3em]
-        Krzysztof Radzewicz\\
-        Jakub Rak
+        Jakub Rak\\
+        Krzysztof Radzewicz
     \end{minipage}
     \hfill
     \begin{minipage}[t]{0.48\textwidth}
         \flushright
         \textbf{Prowadzący:}\\[0.3em]
-        [mgr. inż. Mikołaj Małkiński]
+        [mgr inż. Mikołaj Małkiński]
     \end{minipage}
     \vfill
     
@@ -89,7 +89,7 @@ Kod źródłowy został podzielony na następujące moduły:
     odpowiedzialną za transformację liniową, przechowywanie wag i biasów, a także inicjalizację wag przy pomocy zdefiniowanych rozkładów \cite{he_xavier_init}.
     \item \textbf{activations} — zawiera implementacje funkcji aktywacji (\texttt{ReLU}, \texttt{Sigmoid}, \texttt{Tanh}, i \texttt{Softmax})
     wraz z metodami wyznaczania ich pochodnych na potrzeby propagacji wstecznej.
-    \item \textbf{losses} — zawiera implementacje funkcji straty: błąd średniokwadratowy (\texttt{MSE}), binarna (\texttt{BCE}) i kategoryczna entropia krzyżowa (\texttt{CCE}).
+    \item \textbf{losses} — zawiera implementacje funkcji straty: błąd średniokwadratowy (\texttt{MSE}), błąd bezwzględny (\texttt{MAE}), binarna (\texttt{BCE}) i kategoryczna entropia krzyżowa (\texttt{CCE}).
     \item \textbf{optimizers} — implementuje algorytm \textit{Stochastic gradient descent}.
     \item \textbf{mlp} — zamyka funckjonalność sieci w klasie \texttt{MLP}, przechowując listę warstw i implementując: propagację w przód, propagację wsteczną oraz kroki optymalizatora.
     \item \textbf{utils} — zawiera funkcje pomocnicze, w tym tworzenie mini batch'y, narzędzia do kodowania one-hot, metryki ewaluacyjne oraz ustawianie globalnego ziarna losowości.
@@ -98,8 +98,7 @@ Kod źródłowy został podzielony na następujące moduły:
 Proces uczenia modelu sterowany jest przez metodę \texttt{MLP.fit()}, która w trakcie iteracji po kolejnych mini batchach i epokach na bieżąco zapisuje
 postępy uczenia. Wszystkie metadane zbierane są w formie słownika. Wśród jego kluczy znajdują się m.in. funkcje straty 
 (w skali poszczególnych mini batchy oraz średnie na epokę dla zbioru treningowego i walidacyjnego)
-wprowadzone metryki (np. \textit{Accuracy} dla klasyfikacji), normy Frobeniusa macierzy wag (dla wizualizacji postępów uczenia)
-oraz zmiany wartości kilku wybranych z góry wag sieci.
+wprowadzone metryki (np. \textit{Accuracy} dla klasyfikacji), oraz zmiany wartości kilku wybranych z góry wag i biasów w sieci.
 
 % ==============================================================================
 % 3. EKSPERYMENTY — ZAGADNIENIE REGRESJI
@@ -112,7 +111,8 @@ Badania przeprowadzono dla dwóch jednowymiarowych zbiorów regresyjnych. W obu 
     \item \textbf{Zbiór \texttt{data.activation}} opisuje nieliniową funkcję o kształcie sigmoidalnym/przejściowym. Wartości celu w obszarze uczącym mieszczą się w przybliżeniu w zakresie $[-265,-2]$.
     \item \textbf{Zbiór \texttt{data.cube}} zawiera zależność wielomianową trzeciego stopnia z szumem, a wartości celu w obszarze uczącym znajdują się w przybliżeniu w zakresie $[-198,86]$.
 \end{itemize}
-Wykorzystano gotowe podziały na zbiory uczące i testowe, dostępne dla liczności $N \in \{100,500,1000,10000\}$. Dane w eksperymentach pozostawiono w oryginalnej skali — nie zastosowano standaryzacji ani normalizacji. Jest to istotne, ponieważ duży zakres wartości celu wpływa na skalę gradientów i wrażliwość uczenia na współczynnik $\eta$.
+Wykorzystano gotowe podziały na zbiory uczące i testowe, dostępne dla liczności $N \in \{100,500,1000,10000\}$.
+Dane w eksperymentach pozostawiono w oryginalnej skali — nie zastosowano standaryzacji ani normalizacji. Jest to istotne, ponieważ duży zakres wartości celu wpływa na skalę gradientów i wrażliwość uczenia na współczynnik $\eta$.
 Warstwa wyjściowa składała się z jednego neuronu z aktywacją tożsamościową (bez dodatkowej nieliniowości), dzięki czemu model mógł przewidywać wartości z dowolnego zakresu. Domyślnie stosowano bias. Jakość mierzono przez MSE, MAE i współczynnik determinacji $R^2$; wartości w tabelach są średnimi z trzech przebiegów dla ziaren $42$, $123$ i $999$, o ile nie zaznaczono inaczej. Liczbę epok zwiększono do 1000 w tych eksperymentach, w których krzywe błędu nadal opadały przy poprzednim limicie. Wyjątkiem jest R1 dla \texttt{activation} (150 epok, gdzie strata szybko osiąga plateau) oraz R3 (150 epok, gdzie większe kroki uczenia wykazywały niestabilność).
 
 Na rysunkach krzywe modelu naniesiono na punkty odpowiednich podzbiorów. W eksperymentach architektonicznych i dotyczących funkcji straty podział testowy obejmuje zakresy poza przedziałem uczącym, dlatego ocenia nie tylko interpolację, lecz także ekstrapolację. Szczególnie wyraźnie widać to dla \texttt{data.cube}, którego wielomian rośnie gwałtownie poza obszarem danych uczących.
@@ -381,14 +381,14 @@ się na rozmiarze $N = 100$.
 \begin{itemize}
     \item \textbf{Zbiór \texttt{data.simple}} — klasyfikacja binarnej (2 klasy).
     Skupiska klas rozdzielone są łagodną, ale nieliniową granicą (Rysunek \ref{fig:dataset_simple}).
-    W warstwie wyjściowej stosowano przeważnie pojedynczy neuron z funkcją aktywacji \texttt{Sigmoid} oraz binarną entropię krzyżową
+    Jeśli nie powiedziano wprost inaczej, w warstwie wyjściowej stosowano pojedynczy neuron z funkcją aktywacji \texttt{Sigmoid} oraz binarną entropię krzyżową
     (\texttt{BinaryCrossEntropyLoss}). Wyjątkiem jest \hyperref[sec:K3]{eksperyment 3} którego celem było porównanie entropii krzyżowej do
     błędu średniokwadratowego (\texttt{MSE}).
     \item \textbf{Zbiór \texttt{data.three\_gauss}} — klasyfikacja wieloklasowa (3 klasy). Skupiska powstały przez nałożenie na siebie
     dwuwymiarowych rozkładów gaussowskich (Rysunek~\ref{fig:dataset_three_gauss}). Kluczową cechą tego zbioru jest wyraźne
     nakładanie się rozkładów klas na środku przestrzeni. Ze względu na to przenikanie się klas, zbiór jest trudniejszy w klasyfikacji
     przez co idealne rozpoznawanie klas nie jest możliwe bez przeuczenia.
-    Na wyjściu sieci stosowano 3 neurony z aktywacją \texttt{Softmax}, etykiety kodowane w postaci one-hot
+    Jeśli nie powiedziano wprost inaczej, na wyjściu sieci stosowano 3 neurony z aktywacją \texttt{Softmax}, etykiety kodowane w postaci one-hot
     oraz funkcję kategorycznej entropii krzyżowej (\texttt{CategoricalCrossEntropyLoss}). Wyjątkiem ponownie był
     \hyperref[sec:K3]{eksperyment 3} w którym porównano entropię krzyżową z \texttt{MSE}.
 \end{itemize}
@@ -414,25 +414,25 @@ W ramach eksperymentu zbadano wpływ doboru funkcji aktywacji w warstwach ukryty
 (\texttt{Sigmoid}, \texttt{Tanh}, \texttt{ReLU}) na przebieg uczenia,
 stabilność wag oraz finalny przebieg granic decyzyjnych. 
 Eksperymenty przeprowadzono na jednej architekturze $[2, 32, 16, C]$ ($C=1$ dla klasyfikacji binarnej, $C=3$ dla wieloklasowej)
-przy użyciu optymalizatora \texttt{SGD} ($\eta = 0.05$, 150 epok) dla 3 różnych ziaren losowości ($42, 123, 999$).
+przy użyciu optymalizatora \texttt{SGD} ($\eta = 0.05$, 150 epok) dla 10 różnych ziaren losowości.
 
 Podsumowanie uzyskanych dokładności (\textit{accuracy}) predykcji na zbiorze uczącym i testowym przedstawiono w Tabeli \ref{tab:k1_accuracy}.
 
 \begin{table}[H]
     \centering
-    \caption{Dokładność klasyfikacji dla modeli finalnych w zależności od funkcji aktywacji (średnia $\pm$ odchylenie standardowe z 3 ziaren).}
+    \caption{Dokładność klasyfikacji dla modeli finalnych w zależności od funkcji aktywacji (średnia $\pm$ odchylenie standardowe z 10 ziaren).}
     \label{tab:k1_accuracy}
     \begin{tabular}{llcc}
         \toprule
         \textbf{Zbiór danych} & \textbf{Funkcja aktywacji} & \textbf{Zbiór testowy [\%]} & \textbf{Zbiór uczący [\%]} \\
         \midrule
-        \texttt{data.simple}      & Sigmoid & $97.33 \pm 1.25$ & $96.67 \pm 2.49$ \\
-                                  & Tanh    & $\mathbf{99.67} \pm 0.47$ & $100.00 \pm 0.00$ \\
-                                  & ReLU    & $\mathbf{99.67} \pm 0.47$ & $100.00 \pm 0.00$ \\
+        \texttt{data.simple}      & Sigmoid & $92.70 \pm 4.75$ & $93.20 \pm 4.19$ \\
+                                  & Tanh    & $\mathbf{99.40} \pm 0.49$ & $100.00 \pm 0.00$ \\
+                                  & ReLU    & $99.20 \pm 0.60$ & $100.00 \pm 0.00$ \\
         \midrule
-        \texttt{data.three\_gauss} & Sigmoid & $93.11 \pm 0.16$ & $92.44 \pm 0.16$ \\
-                                  & Tanh    & $992.8 \pm 0.16$ & $92.56 \pm 0.16$ \\
-                                  & ReLU    & $\mathbf{93.22} \pm 0.16$ & $94.11 \pm 0.16$ \\
+        \texttt{data.three\_gauss} & Sigmoid & $92.87 \pm 0.22$ & $92.37 \pm 0.31$ \\
+                                  & Tanh    & $92.87 \pm 0.16$ & $92.63 \pm 0.18$ \\
+                                  & ReLU    & $\mathbf{93.17} \pm 0.27$ & $93.83 \pm 0.48$ \\
         \bottomrule
     \end{tabular}
 \end{table}
@@ -441,29 +441,23 @@ Podsumowanie uzyskanych dokładności (\textit{accuracy}) predykcji na zbiorze u
 \subsubsection{Zbiór danych simple}
 
 W zadaniu binarnym modele z aktywacją \texttt{Tanh} oraz \texttt{ReLU} zdołały w $100\%$ nauczyć się rozpoznawać klasy na zbiorach treningowych
-i dobrze generalizują to na zbiorze testowym ($99.67\%$).
+i dobrze generalizują to na zbiorze testowym ($99.40\%$ dla \texttt{Tanh} oraz $99.20\%$ dla \texttt{ReLU}).
 Funkcja \texttt{Sigmoid} zbiegała wyraźnie wolniej ze względu na nasycenie gradientu (stosunkowo mała wartość pochodnej funkcji sigma).
-Poniżej przedstawiono wykresy ilustrujące przebieg uczenia i finalne rezultaty na zbiorze prostym.
 
 Na Rysunku~\ref{fig:k1_simple_accuracy} można zaobserwować, że dokładność sieci z aktywacją \texttt{Sigmoid} znacznie wolniej zbiega do 1.
-Dodatkowo trajektoria krzywej jest bardziej chaotyczna i wykazuje większe odchylenie standardowe (na badanej próbce 3 ziaren losowych), co sugeruje,
+Dodatkowo trajektoria krzywej jest bardziej chaotyczna i wykazuje większe odchylenie standardowe (na badanej próbce 10 ziaren losowych), co sugeruje,
 że aktywacja \texttt{Sigmoid} jest bardziej wrażliwa na losową inicjalizację wag.
-Gdy porównać nasycenie kolorów na Rysunku~\ref{fig:k1_simple_boundaries},
-widać, że granice decyzyjne dla funkcji \texttt{ReLU} i \texttt{Tanh} są jasno zdefiniowane, co oznacza, że model jest pewny swoich decyzji.
-W przypadku \texttt{Sigmoid} sytuacja jest odwrotna — występuje szerokie pasmo wysokiej niepewności (szacowane prawdopodobieństwo bliskie 0.5).
-Przebieg funkcji straty (Rysunek~\ref{fig:k1_simple_loss}) pokazuje gwałtowny spadek błędu treningowego dla \texttt{ReLU} i \texttt{Tanh} już w pierwszych 20 epokach, 
-podczas gdy strata w modelu \texttt{Sigmoid} maleje powoli i jednostajnie przez cały trening.
-Zmiany pierwszej wagi $w_{0,0}$ oraz biasu $b_0$ pierwszego neuronu (Rysunek~\ref{fig:k1_simple_neuron_weights}) są stabilne i nie ma w nich oscylacji.
-Zestawienie norm Frobeniusa macierzy wag w każdej z warstw (Rysunek~\ref{fig:k1_simple_weight_norms}) wskazuje na powolny
-wzrost normy wag we wszystkich warstwach bez nagłych nieprzewidywalnych zmian, przy czym przez większość czasu najwyższe
-wartości osiąga sieć z aktywacją \texttt{ReLU}.
 
 \begin{figure}[H]
     \centering
     \includegraphics[width=0.90\textwidth]{../experiments/results/classification/k1_simple_accuracy_curves.png}
-    \caption{Przebieg dokładności klasyfikacji w kolejnych epokach dla zbioru \texttt{data.simple} (średnia z 3 ziaren z przedziałem $\pm 1\sigma$).}
+    \caption{Przebieg dokładności klasyfikacji w kolejnych epokach dla zbioru \texttt{data.simple} (średnia z 10 ziaren z przedziałem $\pm 1\sigma$).}
     \label{fig:k1_simple_accuracy}
 \end{figure}
+
+Gdy porównać nasycenie kolorów na Rysunku~\ref{fig:k1_simple_boundaries},
+widać, że granice decyzyjne dla funkcji \texttt{ReLU} i \texttt{Tanh} są jasno zdefiniowane, co oznacza, że model jest pewny swoich decyzji.
+W przypadku \texttt{Sigmoid} sytuacja jest odwrotna — występuje szerokie pasmo wysokiej niepewności (szacowane prawdopodobieństwo bliskie 0.5).
 
 \begin{figure}[H]
     \centering
@@ -472,25 +466,23 @@ wartości osiąga sieć z aktywacją \texttt{ReLU}.
     \label{fig:k1_simple_boundaries}
 \end{figure}
 
+Przebieg funkcji straty (Rysunek~\ref{fig:k1_simple_loss}) pokazuje gwałtowny spadek błędu treningowego dla \texttt{ReLU} i \texttt{Tanh} już w pierwszych 20 epokach, 
+podczas gdy strata w modelu \texttt{Sigmoid} maleje powoli i jednostajnie przez cały trening.
+
 \begin{figure}[H]
     \centering
     \includegraphics[width=0.90\textwidth]{../experiments/results/classification/k1_simple_loss_curves.png}
-    \caption{Przebieg funkcji straty w kolejnych epokach dla zbioru \texttt{data.simple} (średnia z 3 ziaren z przedziałem $\pm 1\sigma$).}
+    \caption{Przebieg funkcji straty w kolejnych epokach dla zbioru \texttt{data.simple} (średnia z 10 ziaren z przedziałem $\pm 1\sigma$).}
     \label{fig:k1_simple_loss}
 \end{figure}
+
+Zmiany pierwszej wagi $w_{0,0}$ oraz biasu $b_0$ pierwszego neuronu (Rysunek~\ref{fig:k1_simple_neuron_weights}) są stabilne i nie ma w nich oscylacji.
 
 \begin{figure}[H]
     \centering
     \includegraphics[width=0.90\textwidth]{../experiments/results/classification/k1_simple_neuron_weights.png}
-    \caption{Ewolucja wagi $w_{0,0}$ i biasu $b_0$ pierwszego neuronu poszczególnych warstw dla zbioru \texttt{data.simple} (ziarno 42).}
+    \caption{Ewolucja wagi $w_{0,0}$ i biasu $b_0$ pierwszego neuronu poszczególnych warstw dla zbioru \texttt{data.simple} (dla wybranego ziarna).}
     \label{fig:k1_simple_neuron_weights}
-\end{figure}
-
-\begin{figure}[H]
-    \centering
-    \includegraphics[width=0.90\textwidth]{../experiments/results/classification/k1_simple_weight_norms.png}
-    \caption{Ewolucja norm Frobeniusa wag poszczególnych warstw w trakcie treningu dla zbioru \texttt{data.simple}.}
-    \label{fig:k1_simple_weight_norms}
 \end{figure}
 
 % --------------------------------------------------------------------------
@@ -502,9 +494,6 @@ Ograniczenie to wynika z fizycznego nakładania się na siebie rozkładów trzec
 Na Rysunku~\ref{fig:k1_three_gauss_boundaries} przedstawiono finalne granice decyzyjne w przestrzeni $\mathbb{R}^2$.
 Funkcja \texttt{ReLU} tworzy odcinkowo liniowe krawędzie podziału, podczas gdy \texttt{Tanh} i \texttt{Sigmoid} wyznaczają gładkie krzywe.
 We wszystkich modelach widoczne są punkty błędnie zaklasyfikowane w centralnej strefie nakładania się klas.
-Krzywe dokładności na Rysunku~\ref{fig:k1_three_gauss_accuracy} pokazują, że \texttt{ReLU} i \texttt{Tanh} już w kilkunastu epokach osiągają dokładność ok. $93\%$,
-podczas gdy \texttt{Sigmoid} początkowo mocno oscyluje i potrzebuje ponad 80 epok na ustabilizowanie predykcji.
-Pozostałe wykresy obrazują podobne zjawiska jak w przypadku zbioru \texttt{data.simple}.
 
 \begin{figure}[H]
     \centering
@@ -513,32 +502,30 @@ Pozostałe wykresy obrazują podobne zjawiska jak w przypadku zbioru \texttt{dat
     \label{fig:k1_three_gauss_boundaries}
 \end{figure}
 
+Krzywe dokładności na Rysunku~\ref{fig:k1_three_gauss_accuracy} pokazują, że \texttt{ReLU} i \texttt{Tanh} już w kilkunastu epokach osiągają dokładność ok. $93\%$,
+podczas gdy \texttt{Sigmoid} początkowo mocno oscyluje i potrzebuje ponad 80 epok na ustabilizowanie predykcji.
+
 \begin{figure}[H]
     \centering
     \includegraphics[width=0.90\textwidth]{../experiments/results/classification/k1_three_gauss_accuracy_curves.png}
-    \caption{Przebieg dokładności klasyfikacji w kolejnych epokach dla zbioru \texttt{data.three\_gauss} (średnia z 3 ziaren z przedziałem $\pm 1\sigma$).}
+    \caption{Przebieg dokładności klasyfikacji w kolejnych epokach dla zbioru \texttt{data.three\_gauss} (średnia z 10 ziaren z przedziałem $\pm 1\sigma$).}
     \label{fig:k1_three_gauss_accuracy}
 \end{figure}
+
+Przebieg funkcji straty (Rysunek~\ref{fig:k1_three_gauss_loss}) oraz ewolucja parametrów pierwszego neuronu (Rysunek~\ref{fig:k1_three_gauss_neuron_weights}) obrazują analogiczne zjawiska szybkiej zbieżności i stabilności jak w przypadku zbioru \texttt{data.simple}.
 
 \begin{figure}[H]
     \centering
     \includegraphics[width=0.90\textwidth]{../experiments/results/classification/k1_three_gauss_loss_curves.png}
-    \caption{Przebieg funkcji straty w kolejnych epokach dla zbioru \texttt{data.three\_gauss} (średnia z 3 ziaren z przedziałem $\pm 1\sigma$).}
+    \caption{Przebieg funkcji straty w kolejnych epokach dla zbioru \texttt{data.three\_gauss} (średnia z 10 ziaren z przedziałem $\pm 1\sigma$).}
     \label{fig:k1_three_gauss_loss}
 \end{figure}
 
 \begin{figure}[H]
     \centering
     \includegraphics[width=0.90\textwidth]{../experiments/results/classification/k1_three_gauss_neuron_weights.png}
-    \caption{Ewolucja wagi $w_{0,0}$ i biasu $b_0$ pierwszego neuronu poszczególnych warstw dla zbioru \texttt{data.three\_gauss} (ziarno 42).}
+    \caption{Ewolucja wagi $w_{0,0}$ i biasu $b_0$ pierwszego neuronu poszczególnych warstw dla zbioru \texttt{data.three\_gauss} (dla wybranego ziarna).}
     \label{fig:k1_three_gauss_neuron_weights}
-\end{figure}
-
-\begin{figure}[H]
-    \centering
-    \includegraphics[width=0.90\textwidth]{../experiments/results/classification/k1_three_gauss_weight_norms.png}
-    \caption{Ewolucja norm Frobeniusa wag poszczególnych warstw w trakcie treningu dla zbioru \texttt{data.three\_gauss}.}
-    \label{fig:k1_three_gauss_weight_norms}
 \end{figure}
 
 % --------------------------------------------------------------------------
@@ -549,7 +536,7 @@ Podsumowując wyniki:
     która cierpi na spowolnienie uczenia wywołane nasyceniem gradientu.
     \item Kształt wyznaczonych granic decyzyjnych odzwierciedla charakter funkcji aktywacji (odcinkowo liniowe dla \texttt{ReLU} vs gładkie dla \texttt{Tanh}).
     W zbiorze \texttt{data.three\_gauss} w którym klasy się nakładają wszystkie modele osiągają zbliżoną skuteczność ograniczoną górną granicą ok. $93\%$.
-    \item Ewolucja norm wag oraz trajektorii pojedynczych neuronów przebiega stabilnie we wszystkich wariantach, potwierdzając że implementacja jest poprawna. W kolejnych eksperymentach te wykresy będą pominietę dla większej czytelności.
+    \item Zmiana wyszczególnionych wag i biasów w sieci przebiega stabilnie we wszystkich wariantach, potwierdzając że implementacja jest poprawna. W kolejnych eksperymentach te wykresy będą pominietę dla większej czytelności.
 \end{itemize}
 
 \subsection{Eksperyment 2 - Architektura sieci}
@@ -565,7 +552,7 @@ Przetestowano 8 wariantów (gdzie $C$ oznacza liczbę rozpoznawanych klas):
     \item sieć 4 warstwową $[2, 64, 32, 16, 8, C]$
 \end{itemize}
 Na podstawie wyników \hyperref[sec:K1]{eskperymentu 1}, tym razem zastosowano wszędzie funkcję aktywacji \texttt{ReLU}
-w warstwach ukrytych. Ziarna losowości pozostają bez zmian ($42, 123, 999$). Natomiast hiperparametry uczenia zostały lekko zmodyfikowane 
+w warstwach ukrytych. Podobnie jak w poprzednim eksperymencie, wykorzystano 10 różnych ziaren losowości. Natomiast hiperparametry uczenia zostały lekko zmodyfikowane 
 ($\eta = 0.01$, 250 epok) aby głębsze sieci miały szansę zostać dotrenowane.
 
 % --------------------------------------------------------------------------
@@ -576,20 +563,20 @@ Wyniki dokładności klasyfikacji dla badanych architektur na zbiorze \texttt{da
 \begin{table}[H]
     \centering
     \setlength{\tabcolsep}{5pt}
-    \caption{Dokładność klasyfikacji w zależności od architektury dla zbioru \texttt{data.simple} (średnia $\pm$ odchylenie standardowe z 3 ziaren).}
+    \caption{Dokładność klasyfikacji w zależności od architektury dla zbioru \texttt{data.simple} (średnia $\pm$ odchylenie standardowe z 10 ziaren).}
     \label{tab:k2_accuracy_simple}
     \begin{tabular}{lccc}
         \toprule
         \textbf{Architektura} & \textbf{Warstwy ukryte} & \textbf{Zbiór testowy [\%]} & \textbf{Zbiór uczący [\%]} \\
         \midrule
-        0 ukrytych: $[2]$                  & 0 & $95.33 \pm 1.25$ & $94.00 \pm 0.82$ \\
-        1 ukryta (4): $[2, 4]$             & 1 & $92.00 \pm 3.27$ & $90.00 \pm 2.16$ \\
-        1 ukryta (16): $[2, 16]$           & 1 & $98.67 \pm 1.25$ & $96.67 \pm 0.94$ \\
-        1 ukryta (64): $[2, 64]$           & 1 & $98.33 \pm 0.94$ & $99.33 \pm 0.47$ \\
-        2 ukryte (A): $[2, 16, 8]$         & 2 & $98.33 \pm 0.94$ & $99.33 \pm 0.47$ \\
-        2 ukryte (B): $[2, 32, 16]$        & 2 & $\mathbf{99.33 \pm 0.47}$ & $100.00 \pm 0.00$ \\
-        3 ukryte: $[2, 32, 16, 8]$         & 3 & $98.67 \pm 1.25$ & $99.67 \pm 0.47$ \\
-        4 ukryte: $[2, 64, 32, 16, 8]$     & 4 & $98.67 \pm 0.47$ & $100.00 \pm 0.00$ \\
+        0 ukrytych: $[2]$                  & 0 & $92.30 \pm 5.25$ & $91.80 \pm 3.82$ \\
+        1 ukryta (4): $[2, 4]$             & 1 & $93.80 \pm 4.49$ & $92.90 \pm 4.44$ \\
+        1 ukryta (16): $[2, 16]$           & 1 & $97.50 \pm 1.43$ & $97.30 \pm 1.27$ \\
+        1 ukryta (64): $[2, 64]$           & 1 & $98.50 \pm 0.81$ & $99.20 \pm 0.60$ \\
+        2 ukryte (A): $[2, 16, 8]$         & 2 & $98.00 \pm 1.34$ & $98.70 \pm 1.19$ \\
+        2 ukryte (B): $[2, 32, 16]$        & 2 & $\mathbf{99.00 \pm 0.63}$ & $99.60 \pm 0.66$ \\
+        3 ukryte: $[2, 32, 16, 8]$         & 3 & $98.40 \pm 1.11$ & $99.90 \pm 0.30$ \\
+        4 ukryte: $[2, 64, 32, 16, 8]$     & 4 & $98.70 \pm 0.46$ & $100.00 \pm 0.00$ \\
         \bottomrule
     \end{tabular}
 \end{table}
@@ -599,34 +586,6 @@ Model liniowy (zero warstw ukrytych) wyznacza liniową granicę, która nie jest
 podczas gdy dodanie jednej ukrytej warstwy 16 neuronów pozwala na płynne dopasowanie granicy i znacznie lepsze podzielenie przestrzeni.
 Głębsze architektury oferują bardziej pewne predykcje i bardziej szczegółową krzywą rozdzielającą przestrzeń.
 
-Krzywe dokładności wraz z postępami w uczeniu (Rysunek~\ref{fig:k2_simple_accuracy}) pokazują, że sieci głębsze (2-4 warstwy)
-osiągają zbieżność znacznie szybciej i mają mniejsze odchylenie standardowe.
-Wąska sieć $[2, 4]$ uczy się z kolei bardzo wolno, z szerokim przedziałem niepewności co sugeruje że jest wrażliwa na inicjalizajcę wag.
-Podobnie w przypadku funkcji straty, (Rysunek~\ref{fig:k2_simple_loss}) sieci płytkie uczą się wolniej 
-(w szcególności model liniowy przy 250 epokach zatrzymuje się na poziomie ok. $0.38$),
-a dodawanie kolejnych warstw z reguły sprawia że sieć szybciej zmniejsza swój błąd uczenia.
-Największa przetestowana sieć 4 warstwowa osiąga wartość straty na poziomie $0.05$.
-
-Kolejne trzy rysunki przedstawiają zmianę norm wag w czasie uczenia dla kilku architektur.
-Dla ustalenia uwagi przyglądamy się trzem z nich:
-\begin{itemize}
-    \item sieci bardzo płytkiej z 1 warstwą ukrytą: $[2, 16, 1]$ (Rysunek~\ref{fig:k2_simple_weight_norms_shallow}),
-    \item sieci średniej z 2 warstwami ukrytymi: $[2, 32, 16, 1]$ (Rysunek~\ref{fig:k2_simple_weight_norms_medium}),
-    \item sieci głębokiej z 4 warstwami ukrytymi: $[2, 64, 32, 16, 8, 1]$ (Rysunek~\ref{fig:k2_simple_weight_norms_deep}).
-\end{itemize}
-
-Porównanie zmian norm Frobeniusa macierzy wag $\|W\|_F$ dla tych trzech sieci prowadzi do następujących obserwacji:
-\begin{enumerate}
-    \item \textbf{Wartości początkowe}: Wartości początkowe norm zależą od rozmiaru macierzy wag 
-    oraz schematu inicjalizacji (\texttt{He} dla warstw ukrytych \texttt{ReLU}, \texttt{Xavier} dla warstwy wyjściowej).
-    Najwyższe normy osiągają macierze o największej liczbie połączeń (np. warstwa 2 o wymiarach $64 \times 32$ w sieci 4-warstwowej).
-    \item \textbf{Zmiana parametrów w czasie}: We wszystkich trzech modelach normy wag rosną monotonicznie i gładko
-    w trakcie całego treningu, co świadczy o stabilności aglorytmu \texttt{SGD} przy kroku $\eta = 0.01$.
-    \item \textbf{Różnice między warstwami}: W sieci płytkiej $[2, 16]$ norma warstwy wyjściowej rosną najbardziej,
-    prawdopodobnie dlatego, że to ta warstwa dysponuje większą ilością informacji (16 cech zamiast tylko 2).
-    Z kolei w sieciach 2 i 4 warstwowych tempo zmiany norm wag wygląda podobnie.
-\end{enumerate}
-
 \begin{figure}[H]
     \centering
     \includegraphics[width=0.92\textwidth]{../experiments/results/classification/k2_simple_decision_boundaries.png}
@@ -634,39 +593,25 @@ Porównanie zmian norm Frobeniusa macierzy wag $\|W\|_F$ dla tych trzech sieci p
     \label{fig:k2_simple_boundaries}
 \end{figure}
 
+Krzywe dokładności wraz z postępami w uczeniu (Rysunek~\ref{fig:k2_simple_accuracy}) pokazują, że sieci głębsze (2-4 warstwy)
+osiągają zbieżność znacznie szybciej i mają mniejsze odchylenie standardowe.
+Wąska sieć $[2, 4]$ uczy się z kolei bardzo wolno, z szerokim przedziałem niepewności co sugeruje że jest wrażliwa na inicjalizajcę wag.
+
 \begin{figure}[H]
     \centering
     \includegraphics[width=0.90\textwidth]{../experiments/results/classification/k2_simple_accuracy_curves.png}
-    \caption{Przebieg dokładności klasyfikacji w kolejnych epokach dla zbioru \texttt{data.simple} w zależności od architektury (średnia z 3 ziaren z przedziałem $\pm 1\sigma$).}
+    \caption{Przebieg dokładności klasyfikacji w kolejnych epokach dla zbioru \texttt{data.simple} w zależności od architektury (średnia z 10 ziaren z przedziałem $\pm 1\sigma$).}
     \label{fig:k2_simple_accuracy}
 \end{figure}
+
+Podobnie w przypadku funkcji straty (Rysunek~\ref{fig:k2_simple_loss}), sieci płytkie uczą się wolniej,
+a dodawanie kolejnych warstw z reguły sprawia że sieć szybciej zmniejsza swój błąd uczenia.
 
 \begin{figure}[H]
     \centering
     \includegraphics[width=0.90\textwidth]{../experiments/results/classification/k2_simple_loss_curves.png}
-    \caption{Przebieg funkcji straty w kolejnych epokach dla zbioru \texttt{data.simple} w zależności od architektury (średnia z 3 ziaren z przedziałem $\pm 1\sigma$).}
+    \caption{Przebieg funkcji straty w kolejnych epokach dla zbioru \texttt{data.simple} w zależności od architektury (średnia z 10 ziaren z przedziałem $\pm 1\sigma$).}
     \label{fig:k2_simple_loss}
-\end{figure}
-
-\begin{figure}[H]
-    \centering
-    \includegraphics[width=0.88\textwidth]{../experiments/results/classification/k2_simple_weight_norms_shallow.png}
-    \caption{Ewolucja norm Frobeniusa wag poszczególnych warstw w sieci 1-warstwowej (\texttt{data.simple}, średnia z 3 ziaren z przedziałem $\pm 1\sigma$).}
-    \label{fig:k2_simple_weight_norms_shallow}
-\end{figure}
-
-\begin{figure}[H]
-    \centering
-    \includegraphics[width=0.88\textwidth]{../experiments/results/classification/k2_simple_weight_norms_medium.png}
-    \caption{Ewolucja norm Frobeniusa wag poszczególnych warstw w sieci 2-warstwowej (\texttt{data.simple}, średnia z 3 ziaren z przedziałem $\pm 1\sigma$).}
-    \label{fig:k2_simple_weight_norms_medium}
-\end{figure}
-
-\begin{figure}[H]
-    \centering
-    \includegraphics[width=0.88\textwidth]{../experiments/results/classification/k2_simple_weight_norms_deep.png}
-    \caption{Ewolucja norm Frobeniusa wag poszczególnych warstw w sieci 4-warstwowej (\texttt{data.simple}, średnia z 3 ziaren z przedziałem $\pm 1\sigma$).}
-    \label{fig:k2_simple_weight_norms_deep}
 \end{figure}
 
 % --------------------------------------------------------------------------
@@ -681,20 +626,20 @@ głębszym modelom osiągnąć znacząco lepszych wyników.
 \begin{table}[H]
     \centering
     \setlength{\tabcolsep}{5pt}
-    \caption{Dokładność klasyfikacji w zależności od architektury dla zbioru \texttt{data.three\_gauss} (średnia $\pm$ odchylenie standardowe z 3 ziaren).}
+    \caption{Dokładność klasyfikacji w zależności od architektury dla zbioru \texttt{data.three\_gauss} (średnia $\pm$ odchylenie standardowe z 10 ziaren).}
     \label{tab:k2_accuracy_three_gauss}
     \begin{tabular}{lccc}
         \toprule
         \textbf{Architektura} & \textbf{Warstwy ukryte} & \textbf{Zbiór testowy [\%]} & \textbf{Zbiór uczący [\%]} \\
         \midrule
-        0 ukrytych: $[2]$                  & 0 & $92.78 \pm 0.16$ & $92.00 \pm 0.47$ \\
-        1 ukryta (4): $[2, 4]$             & 1 & $92.44 \pm 0.87$ & $91.33 \pm 0.54$ \\
-        1 ukryta (16): $[2, 16]$           & 1 & $92.67 \pm 0.27$ & $91.78 \pm 0.16$ \\
-        1 ukryta (64): $[2, 64]$           & 1 & $92.89 \pm 0.16$ & $92.67 \pm 0.27$ \\
-        2 ukryte (A): $[2, 16, 8]$         & 2 & $92.78 \pm 0.16$ & $92.33 \pm 0.00$ \\
-        2 ukryte (B): $[2, 32, 16]$        & 2 & $\mathbf{93.44 \pm 0.16}$ & $93.22 \pm 0.63$ \\
-        3 ukryte: $[2, 32, 16, 8]$         & 3 & $\mathbf{93.44 \pm 0.16}$ & $93.67 \pm 0.27$ \\
-        4 ukryte: $[2, 64, 32, 16, 8]$     & 4 & $\mathbf{93.44 \pm 0.16}$ & $94.33 \pm 0.00$ \\
+        0 ukrytych: $[2]$                  & 0 & $92.70 \pm 0.38$ & $92.20 \pm 0.65$ \\
+        1 ukryta (4): $[2, 4]$             & 1 & $92.53 \pm 0.78$ & $91.63 \pm 0.41$ \\
+        1 ukryta (16): $[2, 16]$           & 1 & $92.73 \pm 0.29$ & $92.40 \pm 0.44$ \\
+        1 ukryta (64): $[2, 64]$           & 1 & $93.07 \pm 0.25$ & $92.73 \pm 0.33$ \\
+        2 ukryte (A): $[2, 16, 8]$         & 2 & $92.90 \pm 0.33$ & $92.47 \pm 0.34$ \\
+        2 ukryte (B): $[2, 32, 16]$        & 2 & $\mathbf{93.43 \pm 0.33}$ & $93.20 \pm 0.60$ \\
+        3 ukryte: $[2, 32, 16, 8]$         & 3 & $93.23 \pm 0.21$ & $93.77 \pm 0.67$ \\
+        4 ukryte: $[2, 64, 32, 16, 8]$     & 4 & $93.40 \pm 0.29$ & $94.43 \pm 0.33$ \\
         \bottomrule
     \end{tabular}
 \end{table}
@@ -702,7 +647,6 @@ głębszym modelom osiągnąć znacząco lepszych wyników.
 Na Rysunku~\ref{fig:k2_three_gauss_boundaries} zobrazowano granice decyzyjne wyznaczone przez badane architektury. 
 Model liniowy, podobnie jak wcześniej dzieli przestrzeń prostymi, podczas gdy architektury głębsze tworzą dokładniejsze granice klasyfikacji. 
 We wszystkich przypadkach jednak w centrum obrazka widoczne są punkty błędnie zaklasyfikowane z uwagi na nakładanie się rozkładów.
-Pozostałe wykresy prezentują się bardzo podobnie do tych ze zbioru \texttt{data.simple}, wnioski są analogiczne. 
 
 \begin{figure}[H]
     \centering
@@ -711,39 +655,20 @@ Pozostałe wykresy prezentują się bardzo podobnie do tych ze zbioru \texttt{da
     \label{fig:k2_three_gauss_boundaries}
 \end{figure}
 
+Przebieg dokładności klasyfikacji (Rysunek~\ref{fig:k2_three_gauss_accuracy}) oraz funkcji straty (Rysunek~\ref{fig:k2_three_gauss_loss}) w kolejnych epokach prezentują zbieżne tendencje jak dla problemu binarnego: modele głębsze szybciej redukują stratę i osiągają stabilniejszą dokładność.
+
 \begin{figure}[H]
     \centering
     \includegraphics[width=0.90\textwidth]{../experiments/results/classification/k2_three_gauss_accuracy_curves.png}
-    \caption{Przebieg dokładności klasyfikacji w kolejnych epokach dla zbioru \texttt{data.three\_gauss} w zależności od architektury (średnia z 3 ziaren z przedziałem $\pm 1\sigma$).}
+    \caption{Przebieg dokładności klasyfikacji w kolejnych epokach dla zbioru \texttt{data.three\_gauss} w zależności od architektury (średnia z 10 ziaren z przedziałem $\pm 1\sigma$).}
     \label{fig:k2_three_gauss_accuracy}
 \end{figure}
 
 \begin{figure}[H]
     \centering
     \includegraphics[width=0.90\textwidth]{../experiments/results/classification/k2_three_gauss_loss_curves.png}
-    \caption{Przebieg funkcji straty w kolejnych epokach dla zbioru \texttt{data.three\_gauss} w zależności od architektury (średnia z 3 ziaren z przedziałem $\pm 1\sigma$).}
+    \caption{Przebieg funkcji straty w kolejnych epokach dla zbioru \texttt{data.three\_gauss} w zależności od architektury (średnia z 10 ziaren z przedziałem $\pm 1\sigma$).}
     \label{fig:k2_three_gauss_loss}
-\end{figure}
-
-\begin{figure}[H]
-    \centering
-    \includegraphics[width=0.88\textwidth]{../experiments/results/classification/k2_three_gauss_weight_norms_shallow.png}
-    \caption{Ewolucja norm Frobeniusa wag poszczególnych warstw w sieci 1-warstwowej (\texttt{data.three\_gauss}, średnia z 3 ziaren z przedziałem $\pm 1\sigma$).}
-    \label{fig:k2_three_gauss_weight_norms_shallow}
-\end{figure}
-
-\begin{figure}[H]
-    \centering
-    \includegraphics[width=0.88\textwidth]{../experiments/results/classification/k2_three_gauss_weight_norms_medium.png}
-    \caption{Ewolucja norm Frobeniusa wag poszczególnych warstw w sieci 2-warstwowej (\texttt{data.three\_gauss}, średnia z 3 ziaren z przedziałem $\pm 1\sigma$).}
-    \label{fig:k2_three_gauss_weight_norms_medium}
-\end{figure}
-
-\begin{figure}[H]
-    \centering
-    \includegraphics[width=0.88\textwidth]{../experiments/results/classification/k2_three_gauss_weight_norms_deep.png}
-    \caption{Ewolucja norm Frobeniusa wag poszczególnych warstw w sieci 4-warstwowej (\texttt{data.three\_gauss}, średnia z 3 ziaren z przedziałem $\pm 1\sigma$).}
-    \label{fig:k2_three_gauss_weight_norms_deep}
 \end{figure}
 
 % --------------------------------------------------------------------------
@@ -754,9 +679,9 @@ Podsumowując badanie wpływu głębokości i szerokości modelu \texttt{MLP}:
     \item W tych konkretnych zadaniach, model bez warstw ukrytych (liniowy) nieco gorzej od sieci głębszych.
     Dla zbiory \texttt{data.simple} podział jest na tyle prosty, że model liniowy nie popełnia wielu błędów. Z kolei dla \texttt{data.three\_gauss}
     szum jest na tyle duży że modele głębokie nie mają szansy daleko prześcignąć modelu liniowego, mimo że uczą się szybciej i osiągają mniejszy błąd.
-    \item Zwiększenie głębokości sieci do 2-4 warstw znacząco przyspiesza tempo zbieżności i obniża błąd treningowy, ale przyrost dokładności powyżej 2 warstw ukrytych jest już mniejszy. Dobrym kompromisem między wielkością sieci i osiąganą dokładnością wydaje się architektura średnia $[2, 32, 16]$. Osiąga ona najwyższy wynik na obu zbiorach ($99.33\%$ dla \texttt{data.simple} oraz $93.44\%$ dla \texttt{data.three\_gauss}).
-    \item Ziana norm Frobeniusa wag dla sieci bardzo płytkiej ($[2, 16]$), średniej ($[2, 32, 16]$) oraz głębokiej ($[2, 64, 32, 16, 8]$) potwierdza że optymalizacja wag we wszystkich warstwach jest stabilna. Przy wykorzystaniu aktywacji \texttt{ReLU}, inicjalizacja wag He chroni przed eksplozją lub zanikaniem gradientu. W sieci głębokiej tempo zmian wag warstw początkowych jest zbliżone do warstw końcowych (choć nie jest tak dynamiczne jak w poprzednim eksperymencie).
-    \item W zbiorze \texttt{data.simple} modele głębokie osiągają niemal zerowe straty treningową bez widocznego spadku wyników na zbiorze testowym. Do tego odchylenia standardowe norm i metryk wskazują na stabilność metody \texttt{SGD} względem ziarna losowego.
+    \item Zwiększenie głębokości sieci do 2-4 warstw znacząco przyspiesza tempo zbieżności i obniża błąd treningowy, ale przyrost dokładności powyżej 2 warstw ukrytych jest już mniejszy. Dobrym kompromisem między wielkością sieci i osiąganą dokładnością wydaje się architektura średnia $[2, 32, 16]$. Osiąga ona najwyższy wynik na obu zbiorach ($99.00\%$ dla \texttt{data.simple} oraz $93.43\%$ dla \texttt{data.three\_gauss}).
+    \item W zbiorze \texttt{data.simple} modele głębokie osiągają niemal zerowe straty treningową bez widocznego spadku wyników na zbiorze testowym.
+    Do tego odchylenia standardowe metryk wskazują na względną stabilność metody \texttt{SGD} względem ziarna losowego.
 \end{itemize}
 
 \subsection{Eksperyment 3 - Wpływ funkcji straty}
@@ -764,39 +689,39 @@ Podsumowując badanie wpływu głębokości i szerokości modelu \texttt{MLP}:
 
 W tym eksperymencie zbadano wpływ doboru funkcji straty na proces uczenia oraz jakość klasyfikacji.
 Porównano dwie funkcje celu: entropię krzyżową (\texttt{Cross-Entropy}: \texttt{BinaryCrossEntropy} + aktywacja wyjściowa \texttt{Sigmoid} dla klasyfikacji binarnej oraz \texttt{CategoricalCrossEntropy} + aktywacja wyjściowa \texttt{Softmax} dla wieloklasowej)
-oraz błąd średniokwadratowy (\texttt{MSE}).
+oraz błąd średniokwadratowy (\texttt{MSE} z aktywacją wyjściową odpowiednią dla zbioru danych).
 Pozostałe elementy sieci ustalono na podstawie wyników dwóch poprzednich eksperymentów:
 \begin{itemize}
-    \item architektura $[2, 32, 16, \text{wyjście}]$
+    \item architektura $[2, 32, 16, C]$, gdzie $C = 1$ dla klasyfikacji binarnej i $C = 3$ dla wieloklasowej
     \item warstwy ukryte z aktywacją \texttt{ReLU} i inicjalizacją \texttt{He}
 \end{itemize}
 Aby dokładniej sprawdzić zachowanie miar błedu, przetestowano trzy wartości współczynnika uczenia: $\eta \in \{0.01, 0.05, 0.2\}$.
-Wyniki uśredniono z 3 ziaren losowych.
+Wyniki uśredniono z 10 różnych ziaren losowości.
 
 % --------------------------------------------------------------------------
 \subsubsection{Zbiór danych simple}
 
 Wyniki dokładności klasyfikacji na zbiorze binarnym \texttt{data.simple} zestawiono w Tabeli~\ref{tab:k3_accuracy_simple}.
-\texttt{Cross-Entropy} osiąga wysoką dokładność już przy najniższym kroku uczenia $\eta = 0.01$ ($99.67\%$).
-W przypadku błędu średniokwadratowego (\texttt{MSE}) przy małym kroku $\eta = 0.01$ sieć radzi sobie zauważalnie słabiej ($97.33\%$).
+\texttt{Cross-Entropy} osiąga wysoką dokładność już przy najniższym kroku uczenia $\eta = 0.01$ ($97.90\%$).
+W przypadku błędu średniokwadratowego (\texttt{MSE}) przy małym kroku $\eta = 0.01$ sieć radzi sobie zauważalnie słabiej ($95.20\%$).
 Dopiero zwiększenie kroku uczenia do $\eta = 0.05$ lub $\eta = 0.2$ pozwala modelowi z funkcją \texttt{MSE} dorównać wynikom \texttt{Cross-Entropy}.
 
 \begin{table}[H]
     \centering
     \setlength{\tabcolsep}{6pt}
-    \caption{Dokładność klasyfikacji w zależności od funkcji straty i współczynnika uczenia $\eta$ dla zbioru \texttt{data.simple} (średnia $\pm$ odchylenie standardowe z 3 ziaren).}
+    \caption{Dokładność klasyfikacji w zależności od funkcji straty i współczynnika uczenia $\eta$ dla zbioru \texttt{data.simple} (średnia $\pm$ odchylenie standardowe z 10 ziaren).}
     \label{tab:k3_accuracy_simple}
-    \begin{tabular}{lccc}
+    \begin{tabular}{cccc}
         \toprule
         \textbf{Funkcja straty} & \textbf{Krok uczenia ($\eta$)} & \textbf{Zbiór testowy [\%]} & \textbf{Zbiór uczący [\%]} \\
         \midrule
-        \texttt{Cross-Entropy} & $0.01$ & $\mathbf{99.67 \pm 0.47}$ & $99.00 \pm 1.41$ \\
-        \texttt{Cross-Entropy} & $0.05$ & $\mathbf{99.67 \pm 0.47}$ & $100.00 \pm 0.00$ \\
-        \texttt{Cross-Entropy} & $0.20$ & $99.33 \pm 0.47$ & $100.00 \pm 0.00$ \\
+        \texttt{Cross-Entropy} & $0.01$ & $97.90 \pm 1.87$ & $98.70 \pm 1.35$ \\
+        \texttt{Cross-Entropy} & $0.05$ & $\mathbf{99.20 \pm 0.60}$ & $100.00 \pm 0.00$ \\
+        \texttt{Cross-Entropy} & $0.20$ & $99.10 \pm 0.54$ & $100.00 \pm 0.00$ \\
         \midrule
-        \texttt{MSE}           & $0.01$ & $97.33 \pm 1.25$ & $98.00 \pm 1.41$ \\
-        \texttt{MSE}           & $0.05$ & $\mathbf{99.67 \pm 0.47}$ & $100.00 \pm 0.00$ \\
-        \texttt{MSE}           & $0.20$ & $99.33 \pm 0.47$ & $100.00 \pm 0.00$ \\
+        \texttt{MSE}           & $0.01$ & $95.20 \pm 3.54$ & $96.30 \pm 3.03$ \\
+        \texttt{MSE}           & $0.05$ & $99.10 \pm 0.83$ & $99.80 \pm 0.40$ \\
+        \texttt{MSE}           & $0.20$ & $99.10 \pm 0.54$ & $100.00 \pm 0.00$ \\
         \bottomrule
     \end{tabular}
 \end{table}
@@ -805,20 +730,6 @@ Na Rysunku~\ref{fig:k3_simple_boundaries} przedstawiono wyznaczone granice decyz
 Obie funkcje straty poprawnie rozdzielają zbiór, jednak dla \texttt{MSE} przy $\eta = 0.01$ granica jest mniej gładka i widać większe niezdecydowanie modelu w pobliżu punktów skrajnych.
 Przy wyższych współczynnikach uczenia granice stają się ostre i bardzo pewne w obu przypadkach.
 
-Przebieg dokładności (Rysunek~\ref{fig:k3_simple_accuracy}) oraz straty (Rysunek~\ref{fig:k3_simple_loss})
-ujawnia wyraźną przewagę tempa uczenia na korzyść \texttt{Cross-Entropy}.
-Model z \texttt{Cross-Entropy} osiąga niemal maksymalną dokładność już w ciągu pierwszych kilkunastu epok,
-podczas gdy \texttt{MSE} przy $\eta = 0.01$ uczy się wolno i z większym rozrzutem pomiędzy ziarnami.
-
-Kluczowe wyjaśnienie tego zachowania widać na wykresie dynamiki aktualizacji wag (Rysunek~\ref{fig:k3_simple_weight_dynamics}).
-Dla funkcji \texttt{MSE} obserwujemy zjawisko nasycenia gradientu.
-Pochodna błędu \texttt{MSE} względem sygnału wejściowego do neuronu wyjściowego zawiera mnożnik w postaci pochodnej sigmoidy $\sigma'(z)$.
-Gdy predykcja wyjściowa jest bliska $0$ lub $1$, pochodna $\sigma'(z)$ dąży do zera,
-co drastycznie tłumi gradient i sprawia, że poprawki wag $\|\Delta W\|$ są bardzo małe.
-W przypadku \texttt{Cross-Entropy} człon $\sigma'(z)$ skraca się w trakcie wyznaczania gradientu,
-a sygnał błędu zależy wprost od różnicy $(y_{pred} - y_{true})$, co zapewnia duże i skuteczne aktualizacje od samego początku treningu.
-Dopiero większy krok uczenia ($\eta = 0.05, 0.2$) w przypadku \texttt{MSE} pozwala zrekompensować małe wartości gradientu.
-
 \begin{figure}[H]
     \centering
     \includegraphics[width=0.92\textwidth]{../experiments/results/classification/k3_simple_decision_boundaries.png}
@@ -826,24 +737,43 @@ Dopiero większy krok uczenia ($\eta = 0.05, 0.2$) w przypadku \texttt{MSE} pozw
     \label{fig:k3_simple_boundaries}
 \end{figure}
 
+Przebieg dokładności (Rysunek~\ref{fig:k3_simple_accuracy}) oraz straty (Rysunek~\ref{fig:k3_simple_loss})
+ujawnia wyraźną przewagę tempa uczenia na korzyść \texttt{Cross-Entropy}.
+Model z \texttt{Cross-Entropy} osiąga niemal maksymalną dokładność już w ciągu pierwszych kilkunastu epok,
+podczas gdy \texttt{MSE} przy $\eta = 0.01$ uczy się wolno i z większym rozrzutem pomiędzy ziarnami.
+
 \begin{figure}[H]
     \centering
     \includegraphics[width=0.90\textwidth]{../experiments/results/classification/k3_simple_accuracy_curves.png}
-    \caption{Przebieg dokładności klasyfikacji w kolejnych epokach dla funkcji \texttt{Cross-Entropy} oraz \texttt{MSE} przy różnych wartościach $\eta$ (\texttt{data.simple}, średnia z 3 ziaren z przedziałem $\pm 1\sigma$).}
+    \caption{Przebieg dokładności klasyfikacji w kolejnych epokach dla funkcji \texttt{Cross-Entropy} oraz \texttt{MSE} przy różnych wartościach $\eta$ (\texttt{data.simple}, średnia z 10 ziaren z przedziałem $\pm 1\sigma$).}
     \label{fig:k3_simple_accuracy}
 \end{figure}
 
 \begin{figure}[H]
     \centering
     \includegraphics[width=0.90\textwidth]{../experiments/results/classification/k3_simple_loss_curves.png}
-    \caption{Przebieg funkcji straty w kolejnych epokach dla \texttt{Cross-Entropy} i \texttt{MSE} na rozdzielonych skalach (\texttt{data.simple}, średnia z 3 ziaren z przedziałem $\pm 1\sigma$).}
+    \caption{Przebieg funkcji straty w kolejnych epokach dla \texttt{Cross-Entropy} i \texttt{MSE} na rozdzielonych skalach (\texttt{data.simple}, średnia z 10 ziaren z przedziałem $\pm 1\sigma$).}
     \label{fig:k3_simple_loss}
 \end{figure}
+
+Różnice w dynamice uczenia wynikają bezpośrednio z postaci początkowego sygnału błędu $\boldsymbol{\delta}^{[L]}$ generowanego na wyjściu sieci (Rysunek~\ref{fig:k3_simple_weight_dynamics}).
+Na wykresie wartości na osi rzędnych (osi $Y$) przedstawiono w skali logarytmicznej, co pozwala uwidocznić różnice rzędów wielkości w sile propagowanego gradientu.
+W procedurze propagacji wstecznej zmiana funkcji straty i aktywacji wyjściowej wpływa wyłącznie na początkowy sygnał błędu $\boldsymbol{\delta}^{[L]}$, podczas gdy pozostała część propagacji wstecznej (aktualizacja wag $\partial \mathcal{L} / \partial \boldsymbol{W}^{[l]} = \boldsymbol{\delta}^{[l]} (\boldsymbol{a}^{[l-1]})^T$ oraz sygnały warstw ukrytych) pozostaje nienaruszona.
+
+W zależności od doboru funkcji celu sygnał błędu na wyjściu przyjmuje postać:
+\begin{align*}
+    \text{Cross-Entropy}: \quad \boldsymbol{\delta}^{[L]} &= \hat{\boldsymbol{y}} - \boldsymbol{y}, \\
+    \text{MSE}: \quad \boldsymbol{\delta}^{[L]} &= (\hat{\boldsymbol{y}} - \boldsymbol{y}) \odot \hat{\boldsymbol{y}} \odot (\mathbf{1} - \hat{\boldsymbol{y}}).
+\end{align*}
+
+Dla błędu średniokwadratowego (\texttt{MSE}) w sygnale pojawia się nasycający czynnik $\hat{\boldsymbol{y}} \odot (\mathbf{1} - \hat{\boldsymbol{y}})$.
+Gdy prawdopodobieństwo wyjściowe $\hat{\boldsymbol{y}}$ zbliża się do $0$ lub $1$, czynnik ten dąży do zera, co drastycznie tłumi gradient o rzędy wielkości (co widać na wykresie w skali $\log$).
+Dla \texttt{Cross-Entropy} zjawisko nasycenia nie występuje, a wielkość błędu zależy wprost od różnicy $(\hat{\boldsymbol{y}} - \boldsymbol{y})$, co zapewnia stabilne i dynamiczne uczenie nawet przy małym kroku $\eta = 0.01$.
 
 \begin{figure}[H]
     \centering
     \includegraphics[width=0.90\textwidth]{../experiments/results/classification/k3_simple_weight_update_dynamics.png}
-    \caption{Dynamika wielkości aktualizacji wag $\|\Delta W\|$ w kolejnych epokach treningu (\texttt{data.simple}). Wyraźnie widoczne tłumienie aktualizacji dla \texttt{MSE} przy $\eta = 0.01$.}
+    \caption{Przebieg normy sygnału błędu warstwy wyjściowej $\|\boldsymbol{\delta}^{[L]}\|$ w kolejnych epokach treningu na zbiorze \texttt{data.simple} (oś $Y$ w skali logarytmicznej, średnia z 10 ziaren z przedziałem $\pm 1\sigma$). Widoczne tłumienie gradientu o rzędy wielkości dla \texttt{MSE} wskutek obecności czynnika nasycenia $\hat{\boldsymbol{y}} \odot (\mathbf{1} - \hat{\boldsymbol{y}})$.}
     \label{fig:k3_simple_weight_dynamics}
 \end{figure}
 
@@ -856,25 +786,25 @@ Tak jak w poprzednich eksperymentach, ze względu na fizyczne nakładanie się r
 
 Nową obserwacją jest to, że w problemie wieloklasowym różnice w końcowej dokładności pomiędzy \texttt{Cross-Entropy} a \texttt{MSE} są jeszcze mniejsze:
 zarówno \texttt{Cross-Entropy}, jak i \texttt{MSE} osiągają ok. $93.0 - 93.2\%$ na zbiorze testowym.
-Niemniej jednak, przy małym kroku $\eta = 0.01$ funkcja \texttt{MSE} uczy się zauważalnie wolniej na zbiorze treningowym ($91.44\%$ wobec $92.89\%$ dla \texttt{Cross-Entropy}),
+Niemniej jednak, przy małym kroku $\eta = 0.01$ funkcja \texttt{MSE} uczy się zauważalnie wolniej na zbiorze treningowym ($91.40\%$ wobec $92.97\%$ dla \texttt{Cross-Entropy}),
 co wskazuje na występowanie analogicznego zjawiska spłaszczenia gradientu przez pochodną funkcji \texttt{Softmax}.
 
 \begin{table}[H]
     \centering
     \setlength{\tabcolsep}{6pt}
-    \caption{Dokładność klasyfikacji w zależności od funkcji straty i współczynnika uczenia $\eta$ dla zbioru \texttt{data.three\_gauss} (średnia $\pm$ odchylenie standardowe z 3 ziaren).}
+    \caption{Dokładność klasyfikacji w zależności od funkcji straty i współczynnika uczenia $\eta$ dla zbioru \texttt{data.three\_gauss} (średnia $\pm$ odchylenie standardowe z 10 ziaren).}
     \label{tab:k3_accuracy_three_gauss}
     \begin{tabular}{lccc}
         \toprule
         \textbf{Funkcja straty} & \textbf{Krok uczenia ($\eta$)} & \textbf{Zbiór testowy [\%]} & \textbf{Zbiór uczący [\%]} \\
         \midrule
-        \texttt{Cross-Entropy} & $0.01$ & $93.11 \pm 0.16$ & $92.89 \pm 0.16$ \\
-        \texttt{Cross-Entropy} & $0.05$ & $\mathbf{93.22 \pm 0.16}$ & $94.11 \pm 0.16$ \\
-        \texttt{Cross-Entropy} & $0.20$ & $\mathbf{93.22 \pm 0.42}$ & $94.78 \pm 0.57$ \\
+        \texttt{Cross-Entropy} & $0.01$ & $93.10 \pm 0.26$ & $92.97 \pm 0.35$ \\
+        \texttt{Cross-Entropy} & $0.05$ & $\mathbf{93.17 \pm 0.27}$ & $93.83 \pm 0.48$ \\
+        \texttt{Cross-Entropy} & $0.20$ & $93.10 \pm 0.33$ & $94.70 \pm 0.81$ \\
         \midrule
-        \texttt{MSE}           & $0.01$ & $93.00 \pm 0.00$ & $91.44 \pm 1.03$ \\
-        \texttt{MSE}           & $0.05$ & $93.11 \pm 0.42$ & $93.00 \pm 0.27$ \\
-        \texttt{MSE}           & $0.20$ & $93.00 \pm 0.27$ & $93.89 \pm 0.42$ \\
+        \texttt{MSE}           & $0.01$ & $92.50 \pm 0.69$ & $91.40 \pm 0.96$ \\
+        \texttt{MSE}           & $0.05$ & $92.97 \pm 0.43$ & $92.97 \pm 0.38$ \\
+        \texttt{MSE}           & $0.20$ & $93.10 \pm 0.26$ & $93.93 \pm 0.44$ \\
         \bottomrule
     \end{tabular}
 \end{table}
@@ -882,8 +812,6 @@ co wskazuje na występowanie analogicznego zjawiska spłaszczenia gradientu prze
 Na Rysunku~\ref{fig:k3_three_gauss_boundaries} zobrazowano granice decyzyjne dla badanych wariantów.
 Dla obu funkcji straty przy krokach $\eta = 0.05$ i $\eta = 0.2$ granice prawidłowo wyodrębniają trzy obszary,
 a punkty błędnie zaklasyfikowane leżą wyłącznie w rejonie wzajemnego przenikania się klas w centrum.
-Pozostałe wykresy (Rysunki~\ref{fig:k3_three_gauss_accuracy}, \ref{fig:k3_three_gauss_loss} oraz \ref{fig:k3_three_gauss_weight_dynamics})
-prezentują zbliżone zjawiska i wnioski będą analogiczne jak dla zbioru \texttt{data.simple}.
 
 \begin{figure}[H]
     \centering
@@ -892,24 +820,28 @@ prezentują zbliżone zjawiska i wnioski będą analogiczne jak dla zbioru \text
     \label{fig:k3_three_gauss_boundaries}
 \end{figure}
 
+Przebieg dokładności klasyfikacji (Rysunek~\ref{fig:k3_three_gauss_accuracy}) oraz funkcji straty (Rysunek~\ref{fig:k3_three_gauss_loss}) w problemie wieloklasowym wykazuje zbieżne tendencje: \texttt{MSE} przy małym kroku $\eta = 0.01$ uczy się wolniej, lecz przy $\eta \ge 0.05$ osiąga skuteczność porównywalną z \texttt{Cross-Entropy}.
+
 \begin{figure}[H]
     \centering
     \includegraphics[width=0.90\textwidth]{../experiments/results/classification/k3_three_gauss_accuracy_curves.png}
-    \caption{Przebieg dokładności klasyfikacji w kolejnych epokach dla zbioru \texttt{data.three\_gauss} (średnia z 3 ziaren z przedziałem $\pm 1\sigma$).}
+    \caption{Przebieg dokładności klasyfikacji w kolejnych epokach dla zbioru \texttt{data.three\_gauss} (średnia z 10 ziaren z przedziałem $\pm 1\sigma$).}
     \label{fig:k3_three_gauss_accuracy}
 \end{figure}
 
 \begin{figure}[H]
     \centering
     \includegraphics[width=0.90\textwidth]{../experiments/results/classification/k3_three_gauss_loss_curves.png}
-    \caption{Przebieg funkcji straty w kolejnych epokach dla zbioru \texttt{data.three\_gauss} (średnia z 3 ziaren z przedziałem $\pm 1\sigma$).}
+    \caption{Przebieg funkcji straty w kolejnych epokach dla zbioru \texttt{data.three\_gauss} (średnia z 10 ziaren z przedziałem $\pm 1\sigma$).}
     \label{fig:k3_three_gauss_loss}
 \end{figure}
+
+Dynamika normy sygnału błędu wyjścia $\|\boldsymbol{\delta}^{[L]}\|$ przedstawiona na Rysunku~\ref{fig:k3_three_gauss_weight_dynamics} (w skali logarytmicznej) potwierdza analogiczne tłumienie gradientu wyjściowego dla funkcji \texttt{MSE} w początkowych epokach treningu na zbiorze wieloklasowym.
 
 \begin{figure}[H]
     \centering
     \includegraphics[width=0.90\textwidth]{../experiments/results/classification/k3_three_gauss_weight_update_dynamics.png}
-    \caption{Dynamika wielkości aktualizacji wag $\|\Delta W\|$ w kolejnych epokach treningu (\texttt{data.three\_gauss}).}
+    \caption{Przebieg normy sygnału błędu warstwy wyjściowej $\|\boldsymbol{\delta}^{[L]}\|$ w kolejnych epokach treningu na zbiorze \texttt{data.three\_gauss} (oś $Y$ w skali logarytmicznej, średnia z 10 ziaren z przedziałem $\pm 1\sigma$).}
     \label{fig:k3_three_gauss_weight_dynamics}
 \end{figure}
 
@@ -918,7 +850,7 @@ prezentują zbliżone zjawiska i wnioski będą analogiczne jak dla zbioru \text
 Podsumowując porównanie \texttt{Cross-Entropy} oraz błędu średniokwadratowego (\texttt{MSE}) w zadaniach klasyfikacji:
 \begin{itemize}
     \item \textbf{Przewaga \texttt{Cross-Entropy}}: Entropia krzyżowa jest lepiej dopasowana do zadań klasyfikacyjnych. Zapewnia szybszą zbieżność i wysoką dokładność już przy małych wartościach kroku uczenia ($\eta = 0.01$). 
-    \item \textbf{Zjawisko nasycenia w \texttt{MSE}}: Zastosowanie funkcji \texttt{MSE} prowadzi do spłaszczenia gradientu w pobliżu nasyconych stanów wyjścia (gdy wyjście jest bliskie 0 lub 1). Obecność pochodnej $\sigma'(z)$ w gradiencie drastycznie zmniejsza poprawki wag $\|\Delta W\|$, przez co sieć uczy się powoli w początkowych fazach.
+    \item \textbf{Zjawisko nasycenia w \texttt{MSE}}: Zastosowanie funkcji \texttt{MSE} wprowadza do początkowego sygnału błędu $\boldsymbol{\delta}^{[L]}$ czynnik nasycenia $\hat{\boldsymbol{y}} \odot (\mathbf{1} - \hat{\boldsymbol{y}})$. Gdy predykcja wyjściowa dąży do 0 lub 1, gradient ulega stłumieniu o rzędy wielkości (co uwidoczniono na wykresach w skali logarytmicznej), drastycznie spowalniając początkowy etap uczenia przy małym kroku $\eta$.
     \item \textbf{Wpływ współczynnika uczenia}: Wolniejsze uczenie modelu z funkcją \texttt{MSE} można częściowo skompensować poprzez zwiększenie wartości $\eta$ (np. do $0.05$ lub $0.2$). Przy większym kroku uczenia sieć z funkcją \texttt{MSE} osiąga ostatecznie zbliżoną dokładność do modelu z \texttt{Cross-Entropy}. Mimo to, entropia kryżowa ma tę przewagę że nie musimy ręcznie dostrajać współczynnika uczenia.
 \end{itemize}
 
