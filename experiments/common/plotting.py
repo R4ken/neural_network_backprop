@@ -180,7 +180,7 @@ def plot_regression_dataset(
 
 def plot_regression_approximations_grid(
     models: dict[str, Any],
-    dataset: RegressionDataset,
+    dataset: RegressionDataset | dict[str, RegressionDataset],
     save_path: Path | str,
     split: Literal["train", "test"] = "train",
     seed: int | None = None,
@@ -200,7 +200,8 @@ def plot_regression_approximations_grid(
     Args:
         models: Dictionary mapping a model label (activation, architecture,
             loss/lr combination, sample size) to a trained model instance.
-        dataset: RegressionDataset instance.
+        dataset: RegressionDataset instance shared by all models, or a mapping
+            from model labels to their corresponding datasets.
         save_path: Destination path for the saved image.
         split: Split used for the scatter points and the evaluation domain.
         seed: Optional random seed of the representative model (shown in the title).
@@ -236,25 +237,29 @@ def plot_regression_approximations_grid(
         axes_list = [axes]
 
     if split == "train":
-        x_points, y_points = dataset.x_train, dataset.y_train
         split_title = "zbiór uczący"
         point_label = "Próbki zbioru uczącego"
     else:
-        x_points, y_points = dataset.x_test, dataset.y_test
         split_title = "zbiór testowy (ekstrapolacja)"
         point_label = "Próbki zbioru testowego"
-
-    x_grid = np.linspace(
-        float(np.min(x_points)), float(np.max(x_points)), grid_points
-    ).reshape(-1, 1)
-
-    train_min = float(np.min(dataset.x_train))
-    train_max = float(np.max(dataset.x_train))
 
     palette = {"Sigmoid": "#1f77b4", "Tanh": "#2ca02c", "ReLU": "#d62728"}
     panel_title_fontsize = 12.0 if n_models <= 3 else (10.5 if n_models <= 6 else 9.5)
 
     for ax, (model_name, model) in zip(axes_list, models.items()):
+        model_dataset = (
+            dataset[model_name] if isinstance(dataset, dict) else dataset
+        )
+        if split == "train":
+            x_points, y_points = model_dataset.x_train, model_dataset.y_train
+        else:
+            x_points, y_points = model_dataset.x_test, model_dataset.y_test
+
+        x_grid = np.linspace(
+            float(np.min(x_points)), float(np.max(x_points)), grid_points
+        ).reshape(-1, 1)
+        train_min = float(np.min(model_dataset.x_train))
+        train_max = float(np.max(model_dataset.x_train))
         y_grid = np.asarray(model.predict(x_grid)).ravel()
         color = palette.get(model_name, None)
 
@@ -305,8 +310,13 @@ def plot_regression_approximations_grid(
 
     if title is None:
         seed_suffix = f" (Ziarno: {seed})" if seed is not None else ""
+        dataset_name = (
+            next(iter(dataset.values())).name
+            if isinstance(dataset, dict)
+            else dataset.name
+        )
         title = (
-            f"Aproksymacja funkcji jednoargumentowej: {dataset.name} – "
+            f"Aproksymacja funkcji jednoargumentowej: {dataset_name} – "
             f"{split_title}{seed_suffix}"
         )
 

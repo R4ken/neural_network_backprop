@@ -59,6 +59,44 @@ from src.py_nn1 import (
     set_seed,
 )
 
+# Default random seeds used for statistical evaluation. The first seed (42)
+# serves as the representative seed for single-seed plots.
+DEFAULT_SEEDS = [42, 123, 999, 0, 1, 7, 2024, 314, 2718, 31337]
+
+# Default epoch budgets. R1, R2, and R4 use the plateau calibration from
+# experiments/calibrate_epochs_regression.py (training loss only); R3 is extended
+# to 1500 epochs so the slower MAE configurations can train beyond the original
+# 100-epoch budget.
+DEFAULT_EPOCHS: dict[str, dict[str, int]] = {
+    "r1": {"activation": 100, "cube": 100},
+    "r2": {"activation": 200, "cube": 150},
+    "r3": {"activation": 1500, "cube": 1500},
+    "r4": {"activation": 100, "cube": 100},
+}
+
+
+def _resolve_epochs(
+    epochs: dict[str, int] | int | None,
+    experiment: str,
+    dataset: str,
+) -> int:
+    """Resolves the epoch budget for one (experiment, dataset) pair.
+
+    Args:
+        epochs: Either a single integer applied to every dataset, a mapping of
+            ``{experiment: {dataset: n}}``, or ``None`` to use ``DEFAULT_EPOCHS``.
+        experiment: Experiment identifier (``"r1"`` ... ``"r4"``).
+        dataset: Dataset name (``"activation"`` or ``"cube"``).
+
+    Returns:
+        The epoch budget for this experiment/dataset combination.
+    """
+    if epochs is None:
+        return DEFAULT_EPOCHS[experiment][dataset]
+    if isinstance(epochs, int):
+        return epochs
+    return epochs[experiment][dataset]
+
 
 def _get_results_dir() -> Path:
     """Returns and ensures the results directory for regression experiments."""
@@ -101,6 +139,10 @@ def _build_summary_row(
 ) -> dict[str, Any]:
     """Builds a CSV summary row with ``_mean`` and ``_std`` suffixes.
 
+    Non-finite metric values (from diverged runs) are ignored when computing the
+    mean and standard deviation, and a ``n_diverged`` field records how many runs
+    were excluded.
+
     Args:
         base_fields: Identifying fields such as dataset and architecture.
         metric_runs: Mapping from metric name to final values across seeds.
@@ -109,9 +151,15 @@ def _build_summary_row(
         A flat dictionary ready to be written by :class:`csv.DictWriter`.
     """
     row = dict(base_fields)
+    n_diverged: int | None = None
     for metric_name, values in metric_runs.items():
-        row[f"{metric_name}_mean"] = float(np.mean(values))
-        row[f"{metric_name}_std"] = float(np.std(values))
+        finite = [float(v) for v in values if np.isfinite(v)]
+        if n_diverged is None:
+            n_diverged = len(values) - len(finite)
+        row[f"{metric_name}_mean"] = float(np.nanmean(finite)) if finite else float("nan")
+        row[f"{metric_name}_std"] = float(np.nanstd(finite)) if finite else float("nan")
+    if n_diverged is not None:
+        row["n_diverged"] = n_diverged
     return row
 
 
@@ -127,7 +175,28 @@ def _write_summary_csv(
         writer.writerows(rows)
 
 
-def run_experiment_r1(seeds: list[int] | None = None, n_samples: int = 1000) -> None:
+def _mean(values: list[float]) -> float:
+    """Mean over finite values; NaN if none are finite."""
+    finite = [float(v) for v in values if np.isfinite(v)]
+    return float(np.mean(finite)) if finite else float("nan")
+
+
+def _std(values: list[float]) -> float:
+    """Standard deviation over finite values; NaN if none are finite."""
+    finite = [float(v) for v in values if np.isfinite(v)]
+    return float(np.std(finite)) if finite else float("nan")
+
+
+def _n_diverged(values: list[float]) -> int:
+    """Number of non-finite values in the list."""
+    return sum(1 for v in values if not np.isfinite(v))
+
+
+def run_experiment_r1(
+    seeds: list[int] | None = None,
+    n_samples: int = 1000,
+    epochs: dict[str, int] | int | None = None,
+) -> None:
     """Runs Experiment R1: Impact of activation functions in hidden layers.
 
     Evaluates Sigmoid, Tanh, and ReLU on data.activation and data.cube, repeating
@@ -136,11 +205,14 @@ def run_experiment_r1(seeds: list[int] | None = None, n_samples: int = 1000) -> 
     data.cube a genuine extrapolation benchmark.
 
     Args:
-        seeds: Random seeds for statistical evaluation. Defaults to [42, 123, 999].
+        seeds: Random seeds for statistical evaluation. Defaults to
+            ``DEFAULT_SEEDS`` (10 seeds, first one representative).
         n_samples: Number of samples in dataset. Defaults to 1000.
+        epochs: Epoch budget, either an int applied everywhere or a
+            ``{experiment: {dataset: int}}`` mapping. Defaults to ``DEFAULT_EPOCHS``.
     """
     if seeds is None:
-        seeds = [42, 123, 999]
+        seeds = list(DEFAULT_SEEDS)
 
     results_dir = _get_results_dir()
     print("=" * 70)
@@ -157,11 +229,41 @@ def run_experiment_r1(seeds: list[int] | None = None, n_samples: int = 1000) -> 
     ]
 
     summary_rows: list[dict[str, Any]] = []
+    summary_fieldnames = [
+        "dataset",
+        "activation",
+        "test_mse_mean",
+        "test_mse_std",
+        "train_mse_mean",
+        "train_mse_std",
+        "test_mae_mean",
+        "test_mae_std",
+        "train_mae_mean",
+        "train_mae_std",
+        "test_r2_mean",
+        "test_r2_std",
+        "train_r2_mean",
+        "train_r2_std",
+        "n_diverged",
+    ]
+    per_seed_rows: list[dict[str, Any]] = []
+    per_seed_fieldnames = [
+        "dataset",
+        "activation",
+        "seed",
+        "test_mse",
+        "train_mse",
+        "test_mae",
+        "train_mae",
+        "test_r2",
+        "train_r2",
+    ]
+    per_seed_csv_path = results_dir / "r1_per_seed_metrics.csv"
 
     for ds_name in dataset_names:
         print(f"\n--> Przetwarzanie zbioru: {ds_name} (N = {n_samples})...")
         dataset: RegressionDataset = load_regression_data(ds_name, n_samples=n_samples)
-        epochs = 150 if ds_name == "activation" else 1000
+        epochs = _resolve_epochs(epochs, "r1", ds_name)
 
         layer_dims = [1, 32, 16, 1]
         layer_names = [
@@ -182,12 +284,14 @@ def run_experiment_r1(seeds: list[int] | None = None, n_samples: int = 1000) -> 
             mae_curves[act_name] = {"train": [], "test": []}
             norm_curves[act_name] = []
 
-            final_train_losses: list[float] = []
-            final_test_losses: list[float] = []
-            final_train_maes: list[float] = []
-            final_test_maes: list[float] = []
-            final_train_r2s: list[float] = []
-            final_test_r2s: list[float] = []
+            metric_runs: dict[str, list[float]] = {
+                "test_mse": [],
+                "train_mse": [],
+                "test_mae": [],
+                "train_mae": [],
+                "test_r2": [],
+                "train_r2": [],
+            }
 
             for seed in seeds:
                 set_seed(seed)
@@ -213,54 +317,53 @@ def run_experiment_r1(seeds: list[int] | None = None, n_samples: int = 1000) -> 
                     verbose=False,
                 )
 
-                loss_curves[act_name]["train"].append(history["loss"])
-                loss_curves[act_name]["test"].append(history["val_loss"])
-                mae_curves[act_name]["train"].append(history["mae"])
-                mae_curves[act_name]["test"].append(history["val_mae"])
-                norm_curves[act_name].append(history["weight_norms"])
+                final_metrics = _compute_final_regression_metrics(model, dataset, loss_fn)
+                for metric_name, values in metric_runs.items():
+                    values.append(final_metrics[metric_name])
 
-                # Exact final metrics computed over the whole split
-                y_pred_train = model.predict(dataset.x_train)
-                y_pred_test = model.predict(dataset.x_test)
+                diverged = not np.isfinite(final_metrics["train_mse"])
+                if diverged:
+                    print(
+                        f"      [ostrzezenie] Ziarno {seed} (aktywacja {act_name}) "
+                        f"rozbierzne - pomijam krzywe dla tego ziarna."
+                    )
+                else:
+                    loss_curves[act_name]["train"].append(history["loss"])
+                    loss_curves[act_name]["test"].append(history["val_loss"])
+                    mae_curves[act_name]["train"].append(history["mae"])
+                    mae_curves[act_name]["test"].append(history["val_mae"])
+                    norm_curves[act_name].append(history["weight_norms"])
 
-                final_train_losses.append(
-                    model.evaluate(dataset.x_train, dataset.y_train, loss_fn)
-                )
-                final_test_losses.append(
-                    model.evaluate(dataset.x_test, dataset.y_test, loss_fn)
-                )
-                final_train_maes.append(compute_mae(y_pred_train, dataset.y_train))
-                final_test_maes.append(compute_mae(y_pred_test, dataset.y_test))
-                final_train_r2s.append(compute_r2(y_pred_train, dataset.y_train))
-                final_test_r2s.append(compute_r2(y_pred_test, dataset.y_test))
+                per_seed_rows.append({
+                    "dataset": ds_name,
+                    "activation": act_name,
+                    "seed": seed,
+                    "test_mse": final_metrics["test_mse"],
+                    "train_mse": final_metrics["train_mse"],
+                    "test_mae": final_metrics["test_mae"],
+                    "train_mae": final_metrics["train_mae"],
+                    "test_r2": final_metrics["test_r2"],
+                    "train_r2": final_metrics["train_r2"],
+                })
 
                 # Store the model and neuron trajectories for the primary seed (42)
                 if seed == seeds[0]:
                     rep_models[act_name] = model
                     rep_neuron_trajectories[act_name] = history["tracked_neuron_weights"]
 
-            summary_rows.append({
-                "dataset": ds_name,
-                "activation": act_name,
-                "test_mse_mean": float(np.mean(final_test_losses)),
-                "test_mse_std": float(np.std(final_test_losses)),
-                "train_mse_mean": float(np.mean(final_train_losses)),
-                "train_mse_std": float(np.std(final_train_losses)),
-                "test_mae_mean": float(np.mean(final_test_maes)),
-                "test_mae_std": float(np.std(final_test_maes)),
-                "train_mae_mean": float(np.mean(final_train_maes)),
-                "train_mae_std": float(np.std(final_train_maes)),
-                "test_r2_mean": float(np.mean(final_test_r2s)),
-                "test_r2_std": float(np.std(final_test_r2s)),
-                "train_r2_mean": float(np.mean(final_train_r2s)),
-                "train_r2_std": float(np.std(final_train_r2s)),
-            })
+            summary_rows.append(
+                _build_summary_row(
+                    {"dataset": ds_name, "activation": act_name},
+                    metric_runs,
+                )
+            )
 
             print(
                 f"   * [{act_name:<7}] MSE testowe: "
-                f"{np.mean(final_test_losses):10.4f} (+/- {np.std(final_test_losses):9.4f}) | "
-                f"MAE testowe: {np.mean(final_test_maes):9.4f} | "
-                f"R2 testowe: {np.mean(final_test_r2s):8.4f}"
+                f"{_mean(metric_runs['test_mse']):10.4f} (+/- {_std(metric_runs['test_mse']):9.4f}) | "
+                f"MAE testowe: {_mean(metric_runs['test_mae']):9.4f} | "
+                f"R2 testowe: {_mean(metric_runs['test_r2']):8.4f}"
+                f" | rozbieżne: {_n_diverged(metric_runs['test_mse'])}"
             )
 
         # Plot 1: Approximation curves on the training split (representative seed)
@@ -344,35 +447,18 @@ def run_experiment_r1(seeds: list[int] | None = None, n_samples: int = 1000) -> 
 
     # Save summary metrics to CSV
     csv_path = results_dir / "r1_summary_metrics.csv"
-    fieldnames = [
-        "dataset",
-        "activation",
-        "test_mse_mean",
-        "test_mse_std",
-        "train_mse_mean",
-        "train_mse_std",
-        "test_mae_mean",
-        "test_mae_std",
-        "train_mae_mean",
-        "train_mae_std",
-        "test_r2_mean",
-        "test_r2_std",
-        "train_r2_mean",
-        "train_r2_std",
-    ]
-    with open(csv_path, mode="w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=fieldnames)
-        writer.writeheader()
-        writer.writerows(summary_rows)
+    _write_summary_csv(csv_path, summary_rows, summary_fieldnames)
+    _write_summary_csv(per_seed_csv_path, per_seed_rows, per_seed_fieldnames)
 
     print(f"\n[Podsumowanie] Zapisano tabelę metryk: {csv_path.name}")
+    print(f"[Podsumowanie] Zapisano metryki per ziarno: {per_seed_csv_path.name}")
     print("=" * 70)
 
 
 def run_experiment_r2(
     seeds: list[int] | None = None,
     n_samples: int = 1000,
-    epochs: int = 1000,
+    epochs: dict[str, int] | int | None = None,
     lr: float = 0.0005,
     activation_cls: type = Tanh,
     init_method: str = "xavier",
@@ -384,15 +470,17 @@ def run_experiment_r2(
     remains numerically stable for the deepest raw-data configuration.
 
     Args:
-        seeds: Random seeds for statistical evaluation. Defaults to [42, 123, 999].
+        seeds: Random seeds for statistical evaluation. Defaults to
+            ``DEFAULT_SEEDS`` (10 seeds, first one representative).
         n_samples: Number of samples in dataset. Defaults to 1000.
-        epochs: Number of training epochs. Defaults to 1000.
+        epochs: Epoch budget, either an int applied everywhere or a
+            ``{experiment: {dataset: int}}`` mapping. Defaults to ``DEFAULT_EPOCHS``.
         lr: Learning rate for SGD optimizer. Defaults to 0.0005.
         activation_cls: Activation class for hidden layers. Defaults to Tanh.
         init_method: Weight initialization strategy. Defaults to "xavier".
     """
     if seeds is None:
-        seeds = [42, 123, 999]
+        seeds = list(DEFAULT_SEEDS)
 
     results_dir = _get_results_dir()
     act_name = activation_cls.__name__
@@ -466,10 +554,13 @@ def run_experiment_r2(
 
     neuron_comp_keys = ["1_hidden_medium", "2_hidden_b", "4_hidden"]
     summary_rows: list[dict[str, Any]] = []
+    per_seed_rows: list[dict[str, Any]] = []
+    per_seed_csv_path = results_dir / "r2_per_seed_metrics.csv"
 
     for ds_name in ("activation", "cube"):
         print(f"\n--> Przetwarzanie zbioru: {ds_name} (N = {n_samples})...")
         dataset = load_regression_data(ds_name, n_samples=n_samples)
+        ds_epochs = _resolve_epochs(epochs, "r2", ds_name)
 
         loss_curves: dict[str, dict[str, list[list[float]]]] = {}
         mae_curves: dict[str, dict[str, list[list[float]]]] = {}
@@ -528,24 +619,44 @@ def run_experiment_r2(
                     y_train=dataset.y_train,
                     loss_fn=loss_fn,
                     optimizer=optimizer,
-                    epochs=epochs,
+                    epochs=ds_epochs,
                     batch_size=32,
                     validation_data=(dataset.x_test, dataset.y_test),
                     metrics={"mae": compute_mae},
                     verbose=False,
                 )
 
-                loss_curves[arch_name]["train"].append(history["loss"])
-                loss_curves[arch_name]["test"].append(history["val_loss"])
-                mae_curves[arch_name]["train"].append(history["mae"])
-                mae_curves[arch_name]["test"].append(history["val_mae"])
-
-                if arch_key == "4_hidden":
-                    deep_norm_runs.append(history["weight_norms"])
-
                 final_metrics = _compute_final_regression_metrics(model, dataset, loss_fn)
                 for metric_name, values in metric_runs.items():
                     values.append(final_metrics[metric_name])
+
+                diverged = not np.isfinite(final_metrics["train_mse"])
+                if diverged:
+                    print(
+                        f"      [ostrzezenie] Ziarno {seed} (architektura {arch_name}) "
+                        f"rozbierzne - pomijam krzywe dla tego ziarna."
+                    )
+                else:
+                    loss_curves[arch_name]["train"].append(history["loss"])
+                    loss_curves[arch_name]["test"].append(history["val_loss"])
+                    mae_curves[arch_name]["train"].append(history["mae"])
+                    mae_curves[arch_name]["test"].append(history["val_mae"])
+
+                    if arch_key == "4_hidden":
+                        deep_norm_runs.append(history["weight_norms"])
+
+                per_seed_rows.append({
+                    "dataset": ds_name,
+                    "architecture": arch_name,
+                    "num_hidden_layers": num_hidden,
+                    "seed": seed,
+                    "test_mse": final_metrics["test_mse"],
+                    "train_mse": final_metrics["train_mse"],
+                    "test_mae": final_metrics["test_mae"],
+                    "train_mae": final_metrics["train_mae"],
+                    "test_r2": final_metrics["test_r2"],
+                    "train_r2": final_metrics["train_r2"],
+                })
 
                 if seed == seeds[0]:
                     rep_models[arch_name] = model
@@ -563,12 +674,12 @@ def run_experiment_r2(
                 )
             )
 
-            mean_tr_mse = float(np.mean(metric_runs["train_mse"]))
-            std_tr_mse = float(np.std(metric_runs["train_mse"]))
-            mean_te_mse = float(np.mean(metric_runs["test_mse"]))
-            std_te_mse = float(np.std(metric_runs["test_mse"]))
-            mean_te_mae = float(np.mean(metric_runs["test_mae"]))
-            mean_te_r2 = float(np.mean(metric_runs["test_r2"]))
+            mean_tr_mse = _mean(metric_runs["train_mse"])
+            std_tr_mse = _std(metric_runs["train_mse"])
+            mean_te_mse = _mean(metric_runs["test_mse"])
+            std_te_mse = _std(metric_runs["test_mse"])
+            mean_te_mae = _mean(metric_runs["test_mae"])
+            mean_te_r2 = _mean(metric_runs["test_r2"])
 
             train_mse_means.append(mean_tr_mse)
             train_mse_stds.append(std_tr_mse)
@@ -580,9 +691,10 @@ def run_experiment_r2(
                 f"{mean_te_mse:10.4f} (+/- {std_te_mse:9.4f}) | "
                 f"MAE testowe: {mean_te_mae:9.4f} | "
                 f"R2 testowe: {mean_te_r2:8.4f}"
+                f" | rozbieżne: {_n_diverged(metric_runs['test_mse'])}"
             )
 
-        epochs_range = np.arange(1, epochs + 1)
+        epochs_range = np.arange(1, ds_epochs + 1)
 
         # Plot 1: Approximations on the training split (representative seed)
         approx_train_path = results_dir / f"r2_{ds_name}_approximation_train.png"
@@ -710,17 +822,33 @@ def run_experiment_r2(
         "test_r2_std",
         "train_r2_mean",
         "train_r2_std",
+        "n_diverged",
     ]
     _write_summary_csv(csv_path, summary_rows, fieldnames)
 
+    per_seed_fieldnames = [
+        "dataset",
+        "architecture",
+        "num_hidden_layers",
+        "seed",
+        "test_mse",
+        "train_mse",
+        "test_mae",
+        "train_mae",
+        "test_r2",
+        "train_r2",
+    ]
+    _write_summary_csv(per_seed_csv_path, per_seed_rows, per_seed_fieldnames)
+
     print(f"\n[Podsumowanie R2] Zapisano tabelę metryk: {csv_path.name}")
+    print(f"[Podsumowanie R2] Zapisano metryki per ziarno: {per_seed_csv_path.name}")
     print("=" * 70)
 
 
 def run_experiment_r3(
     seeds: list[int] | None = None,
     n_samples: int = 1000,
-    epochs: int = 150,
+    epochs: dict[str, int] | int | None = None,
     learning_rates: list[float] | None = None,
     activation_cls: type = Tanh,
     init_method: str = "xavier",
@@ -732,15 +860,17 @@ def run_experiment_r3(
     the residual-dependent MSE gradient, hence the learning-rate sweep.
 
     Args:
-        seeds: Random seeds for statistical evaluation. Defaults to [42, 123, 999].
+        seeds: Random seeds for statistical evaluation. Defaults to
+            ``DEFAULT_SEEDS`` (10 seeds, first one representative).
         n_samples: Number of samples in dataset. Defaults to 1000.
-        epochs: Number of training epochs. Defaults to 150.
+        epochs: Epoch budget, either an int applied everywhere or a
+            ``{experiment: {dataset: int}}`` mapping. Defaults to ``DEFAULT_EPOCHS``.
         learning_rates: Learning rates to evaluate. Defaults to [0.001, 0.005, 0.01].
         activation_cls: Activation class for hidden layers. Defaults to Tanh.
         init_method: Weight initialization strategy. Defaults to "xavier".
     """
     if seeds is None:
-        seeds = [42, 123, 999]
+        seeds = list(DEFAULT_SEEDS)
     if learning_rates is None:
         learning_rates = [0.001, 0.005, 0.01]
 
@@ -760,10 +890,13 @@ def run_experiment_r3(
         ("MAE", MAELoss),
     ]
     summary_rows: list[dict[str, Any]] = []
+    per_seed_rows: list[dict[str, Any]] = []
+    per_seed_csv_path = results_dir / "r3_per_seed_metrics.csv"
 
     for ds_name in ("activation", "cube"):
         print(f"\n--> Przetwarzanie zbioru: {ds_name} (N = {n_samples})...")
         dataset = load_regression_data(ds_name, n_samples=n_samples)
+        ds_epochs = _resolve_epochs(epochs, "r3", ds_name)
 
         layer_dims = [1, 32, 16, 1]
         layer_names = [
@@ -823,23 +956,12 @@ def run_experiment_r3(
                         y_train=dataset.y_train,
                         loss_fn=loss_fn,
                         optimizer=optimizer,
-                        epochs=epochs,
+                        epochs=ds_epochs,
                         batch_size=32,
                         validation_data=(dataset.x_test, dataset.y_test),
                         metrics={"mae": compute_mae},
                         verbose=False,
                     )
-
-                    mae_by_lr[lr][loss_name]["train"].append(history["mae"])
-                    mae_by_lr[lr][loss_name]["test"].append(history["val_mae"])
-                    loss_by_fn[loss_name][lr]["train"].append(history["loss"])
-                    loss_by_fn[loss_name][lr]["test"].append(history["val_loss"])
-
-                    total_updates = [
-                        float(np.sqrt(sum(u**2 for u in epoch_updates)))
-                        for epoch_updates in history["weight_update_norms"]
-                    ]
-                    updates_by_lr[lr][loss_name].append(total_updates)
 
                     # MSE/MAE/R^2 are always reported with the same definitions,
                     # independently of the optimized loss function.
@@ -848,6 +970,37 @@ def run_experiment_r3(
                     )
                     for metric_name, values in metric_runs.items():
                         values.append(final_metrics[metric_name])
+
+                    diverged = not np.isfinite(final_metrics["train_mse"])
+                    if diverged:
+                        print(
+                            f"      [ostrzezenie] Ziarno {seed} "
+                            f"({loss_name}, lr={lr}) rozbierzne - pomijam krzywe."
+                        )
+                    else:
+                        mae_by_lr[lr][loss_name]["train"].append(history["mae"])
+                        mae_by_lr[lr][loss_name]["test"].append(history["val_mae"])
+                        loss_by_fn[loss_name][lr]["train"].append(history["loss"])
+                        loss_by_fn[loss_name][lr]["test"].append(history["val_loss"])
+
+                        total_updates = [
+                            float(np.sqrt(sum(u**2 for u in epoch_updates)))
+                            for epoch_updates in history["weight_update_norms"]
+                        ]
+                        updates_by_lr[lr][loss_name].append(total_updates)
+
+                    per_seed_rows.append({
+                        "dataset": ds_name,
+                        "loss_function": loss_name,
+                        "learning_rate": lr,
+                        "seed": seed,
+                        "test_mse": final_metrics["test_mse"],
+                        "train_mse": final_metrics["train_mse"],
+                        "test_mae": final_metrics["test_mae"],
+                        "train_mae": final_metrics["train_mae"],
+                        "test_r2": final_metrics["test_r2"],
+                        "train_r2": final_metrics["train_r2"],
+                    })
 
                     if seed == seeds[0]:
                         model_label = f"{loss_name} (lr = {lr})"
@@ -867,19 +1020,20 @@ def run_experiment_r3(
                     )
                 )
 
-                mean_te_mse = float(np.mean(metric_runs["test_mse"]))
-                std_te_mse = float(np.std(metric_runs["test_mse"]))
-                mean_te_mae = float(np.mean(metric_runs["test_mae"]))
-                mean_te_r2 = float(np.mean(metric_runs["test_r2"]))
+                mean_te_mse = _mean(metric_runs["test_mse"])
+                std_te_mse = _std(metric_runs["test_mse"])
+                mean_te_mae = _mean(metric_runs["test_mae"])
+                mean_te_r2 = _mean(metric_runs["test_r2"])
 
                 print(
                     f"   * [{loss_name:<3} | lr={lr:<6}] MSE testowe: "
                     f"{mean_te_mse:10.4f} (+/- {std_te_mse:9.4f}) | "
                     f"MAE testowe: {mean_te_mae:9.4f} | "
                     f"R2 testowe: {mean_te_r2:8.4f}"
+                    f" | rozbieżne: {_n_diverged(metric_runs['test_mse'])}"
                 )
 
-        epochs_range = np.arange(1, epochs + 1)
+        epochs_range = np.arange(1, ds_epochs + 1)
 
         # Plot 1: Approximations on the training split (representative seed)
         approx_train_path = results_dir / f"r3_{ds_name}_approximation_train.png"
@@ -985,17 +1139,33 @@ def run_experiment_r3(
         "test_r2_std",
         "train_r2_mean",
         "train_r2_std",
+        "n_diverged",
     ]
     _write_summary_csv(csv_path, summary_rows, fieldnames)
 
+    per_seed_fieldnames = [
+        "dataset",
+        "loss_function",
+        "learning_rate",
+        "seed",
+        "test_mse",
+        "train_mse",
+        "test_mae",
+        "train_mae",
+        "test_r2",
+        "train_r2",
+    ]
+    _write_summary_csv(per_seed_csv_path, per_seed_rows, per_seed_fieldnames)
+
     print(f"\n[Podsumowanie R3] Zapisano tabelę metryk: {csv_path.name}")
+    print(f"[Podsumowanie R3] Zapisano metryki per ziarno: {per_seed_csv_path.name}")
     print("=" * 70)
 
 
 def run_experiment_r4(
     seeds: list[int] | None = None,
     sample_sizes: list[int] | None = None,
-    epochs: int = 1000,
+    epochs: dict[str, int] | int | None = None,
     lr: float = 0.001,
     activation_cls: type = Tanh,
     init_method: str = "xavier",
@@ -1007,15 +1177,17 @@ def run_experiment_r4(
     shape of the fitted curve.
 
     Args:
-        seeds: Random seeds for statistical evaluation. Defaults to [42, 123, 999].
+        seeds: Random seeds for statistical evaluation. Defaults to
+            ``DEFAULT_SEEDS`` (10 seeds, first one representative).
         sample_sizes: Training-set sizes to evaluate. Defaults to [100, 500, 1000, 10000].
-        epochs: Number of training epochs. Defaults to 1000.
+        epochs: Epoch budget, either an int applied everywhere or a
+            ``{experiment: {dataset: int}}`` mapping. Defaults to ``DEFAULT_EPOCHS``.
         lr: Learning rate for SGD optimizer. Defaults to 0.001.
         activation_cls: Activation class for hidden layers. Defaults to Tanh.
         init_method: Weight initialization strategy. Defaults to "xavier".
     """
     if seeds is None:
-        seeds = [42, 123, 999]
+        seeds = list(DEFAULT_SEEDS)
     if sample_sizes is None:
         sample_sizes = [100, 500, 1000, 10000]
 
@@ -1031,6 +1203,8 @@ def run_experiment_r4(
     print("=" * 70)
 
     summary_rows: list[dict[str, Any]] = []
+    per_seed_rows: list[dict[str, Any]] = []
+    per_seed_csv_path = results_dir / "r4_per_seed_metrics.csv"
     layer_dims = [1, 32, 16, 1]
     layer_names = [
         "Warstwa 1 (1 -> 32)",
@@ -1040,10 +1214,12 @@ def run_experiment_r4(
 
     for ds_name in ("activation", "cube"):
         print(f"\n--> Przetwarzanie zbioru: {ds_name}...")
+        ds_epochs = _resolve_epochs(epochs, "r4", ds_name)
 
         loss_curves: dict[str, dict[str, list[list[float]]]] = {}
         norm_curves: dict[str, list[list[list[float]]]] = {}
         rep_models: dict[str, MLP] = {}
+        sample_datasets: dict[str, RegressionDataset] = {}
         rep_neuron_trajectories: dict[str, NeuronTrajectory] = {}
 
         train_mse_means: list[float] = []
@@ -1054,6 +1230,7 @@ def run_experiment_r4(
         for n in sample_sizes:
             dataset = load_regression_data(ds_name, n_samples=n)
             label = f"N = {n}"
+            sample_datasets[label] = dataset
             print(f"   -> N = {n} (zbior uczacy: {len(dataset.x_train)} probek)")
 
             loss_curves[label] = {"train": [], "test": []}
@@ -1085,20 +1262,39 @@ def run_experiment_r4(
                     y_train=dataset.y_train,
                     loss_fn=loss_fn,
                     optimizer=optimizer,
-                    epochs=epochs,
+                    epochs=ds_epochs,
                     batch_size=32,
                     validation_data=(dataset.x_test, dataset.y_test),
                     metrics={"mae": compute_mae},
                     verbose=False,
                 )
 
-                loss_curves[label]["train"].append(history["loss"])
-                loss_curves[label]["test"].append(history["val_loss"])
-                norm_curves[label].append(history["weight_norms"])
-
                 final_metrics = _compute_final_regression_metrics(model, dataset, loss_fn)
                 for metric_name, values in metric_runs.items():
                     values.append(final_metrics[metric_name])
+
+                diverged = not np.isfinite(final_metrics["train_mse"])
+                if diverged:
+                    print(
+                        f"      [ostrzezenie] Ziarno {seed} (N = {n}) "
+                        f"rozbierzne - pomijam krzywe dla tego ziarna."
+                    )
+                else:
+                    loss_curves[label]["train"].append(history["loss"])
+                    loss_curves[label]["test"].append(history["val_loss"])
+                    norm_curves[label].append(history["weight_norms"])
+
+                per_seed_rows.append({
+                    "dataset": ds_name,
+                    "n_samples": n,
+                    "seed": seed,
+                    "test_mse": final_metrics["test_mse"],
+                    "train_mse": final_metrics["train_mse"],
+                    "test_mae": final_metrics["test_mae"],
+                    "train_mae": final_metrics["train_mae"],
+                    "test_r2": final_metrics["test_r2"],
+                    "train_r2": final_metrics["train_r2"],
+                })
 
                 if seed == seeds[0]:
                     rep_models[label] = model
@@ -1111,12 +1307,12 @@ def run_experiment_r4(
                 )
             )
 
-            mean_tr_mse = float(np.mean(metric_runs["train_mse"]))
-            std_tr_mse = float(np.std(metric_runs["train_mse"]))
-            mean_te_mse = float(np.mean(metric_runs["test_mse"]))
-            std_te_mse = float(np.std(metric_runs["test_mse"]))
-            mean_te_mae = float(np.mean(metric_runs["test_mae"]))
-            mean_te_r2 = float(np.mean(metric_runs["test_r2"]))
+            mean_tr_mse = _mean(metric_runs["train_mse"])
+            std_tr_mse = _std(metric_runs["train_mse"])
+            mean_te_mse = _mean(metric_runs["test_mse"])
+            std_te_mse = _std(metric_runs["test_mse"])
+            mean_te_mae = _mean(metric_runs["test_mae"])
+            mean_te_r2 = _mean(metric_runs["test_r2"])
 
             train_mse_means.append(mean_tr_mse)
             train_mse_stds.append(std_tr_mse)
@@ -1128,15 +1324,16 @@ def run_experiment_r4(
                 f"{mean_te_mse:10.4f} (+/- {std_te_mse:9.4f}) | "
                 f"MAE testowe: {mean_te_mae:9.4f} | "
                 f"R2 testowe: {mean_te_r2:8.4f}"
+                f" | rozbieżne: {_n_diverged(metric_runs['test_mse'])}"
             )
 
-        epochs_range = np.arange(1, epochs + 1)
+        epochs_range = np.arange(1, ds_epochs + 1)
 
         # Plot 1: Approximations on the training split (representative seed)
         approx_train_path = results_dir / f"r4_{ds_name}_approximation_train.png"
         plot_regression_approximations_grid(
             models=rep_models,
-            dataset=dataset,
+            dataset=sample_datasets,
             save_path=approx_train_path,
             split="train",
             seed=seeds[0],
@@ -1155,7 +1352,7 @@ def run_experiment_r4(
         approx_test_path = results_dir / f"r4_{ds_name}_approximation_test.png"
         plot_regression_approximations_grid(
             models=rep_models,
-            dataset=dataset,
+            dataset=sample_datasets,
             save_path=approx_test_path,
             split="test",
             seed=seeds[0],
@@ -1247,10 +1444,25 @@ def run_experiment_r4(
         "test_r2_std",
         "train_r2_mean",
         "train_r2_std",
+        "n_diverged",
     ]
     _write_summary_csv(csv_path, summary_rows, fieldnames)
 
+    per_seed_fieldnames = [
+        "dataset",
+        "n_samples",
+        "seed",
+        "test_mse",
+        "train_mse",
+        "test_mae",
+        "train_mae",
+        "test_r2",
+        "train_r2",
+    ]
+    _write_summary_csv(per_seed_csv_path, per_seed_rows, per_seed_fieldnames)
+
     print(f"\n[Podsumowanie R4] Zapisano tabelę metryk: {csv_path.name}")
+    print(f"[Podsumowanie R4] Zapisano metryki per ziarno: {per_seed_csv_path.name}")
     print("=" * 70)
 
 
@@ -1279,16 +1491,23 @@ def main() -> None:
         help="Liczba próbek w zbiorze danych dla R1-R3 (domyślnie: 1000)",
     )
     parser.add_argument(
-        "--epochs",
+        "--seeds",
         type=int,
-        default=150,
-        help="Liczba epok treningu dla R3 (domyślnie: 150)",
+        nargs="+",
+        default=None,
+        help=(
+            "Ziarna losowe użyte w eksperymentach (domyślnie: 10 ziaren "
+            "z DEFAULT_SEEDS)"
+        ),
     )
     parser.add_argument(
-        "--r2-epochs",
+        "--epochs",
         type=int,
-        default=1000,
-        help="Liczba epok treningu dla R2 (domyślnie: 1000)",
+        default=None,
+        help=(
+            "Nadpisuje liczbę epok treningu dla wszystkich eksperymentów/datasetów "
+            "(domyślnie: DEFAULT_EPOCHS; R3 używa rozszerzonego budżetu 1500 epok)"
+        ),
     )
     parser.add_argument(
         "--r2-lr",
@@ -1296,36 +1515,48 @@ def main() -> None:
         default=0.0005,
         help="Współczynnik uczenia dla R2 (domyślnie: 0.0005)",
     )
-    parser.add_argument(
-        "--r4-epochs",
-        type=int,
-        default=1000,
-        help="Liczba epok treningu dla R4 (domyślnie: 1000)",
-    )
 
     args = parser.parse_args()
 
     if args.experiment == "1":
-        run_experiment_r1(n_samples=args.n_samples)
+        run_experiment_r1(
+            n_samples=args.n_samples,
+            seeds=args.seeds,
+            epochs=args.epochs,
+        )
     elif args.experiment == "2":
         run_experiment_r2(
             n_samples=args.n_samples,
-            epochs=args.r2_epochs,
+            seeds=args.seeds,
+            epochs=args.epochs,
             lr=args.r2_lr,
         )
     elif args.experiment == "3":
-        run_experiment_r3(n_samples=args.n_samples, epochs=args.epochs)
+        run_experiment_r3(
+            n_samples=args.n_samples,
+            seeds=args.seeds,
+            epochs=args.epochs,
+        )
     elif args.experiment == "4":
-        run_experiment_r4(epochs=args.r4_epochs)
+        run_experiment_r4(seeds=args.seeds, epochs=args.epochs)
     elif args.experiment == "all":
-        run_experiment_r1(n_samples=args.n_samples)
+        run_experiment_r1(
+            n_samples=args.n_samples,
+            seeds=args.seeds,
+            epochs=args.epochs,
+        )
         run_experiment_r2(
             n_samples=args.n_samples,
-            epochs=args.r2_epochs,
+            seeds=args.seeds,
+            epochs=args.epochs,
             lr=args.r2_lr,
         )
-        run_experiment_r3(n_samples=args.n_samples, epochs=args.epochs)
-        run_experiment_r4(epochs=args.r4_epochs)
+        run_experiment_r3(
+            n_samples=args.n_samples,
+            seeds=args.seeds,
+            epochs=args.epochs,
+        )
+        run_experiment_r4(seeds=args.seeds, epochs=args.epochs)
 
 
 if __name__ == "__main__":
