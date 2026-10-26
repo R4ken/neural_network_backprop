@@ -54,7 +54,7 @@
     \begin{minipage}[t]{0.48\textwidth}
         \flushright
         \textbf{Prowadzący:}\\[0.3em]
-        [mgr inż. Mikołaj Małkiński]
+        mgr inż. Mikołaj Małkiński
     \end{minipage}
     \vfill
     
@@ -382,8 +382,8 @@ się na rozmiarze $N = 100$.
     \item \textbf{Zbiór \texttt{data.simple}} — klasyfikacja binarnej (2 klasy).
     Skupiska klas rozdzielone są łagodną, ale nieliniową granicą (Rysunek \ref{fig:dataset_simple}).
     Jeśli nie powiedziano wprost inaczej, w warstwie wyjściowej stosowano pojedynczy neuron z funkcją aktywacji \texttt{Sigmoid} oraz binarną entropię krzyżową
-    (\texttt{BinaryCrossEntropyLoss}). Wyjątkiem jest \hyperref[sec:K3]{eksperyment 3} którego celem było porównanie entropii krzyżowej do
-    błędu średniokwadratowego (\texttt{MSE}).
+    (\texttt{BinaryCrossEntropyLoss}). Wyjątkiem jest \hyperref[sec:K3]{eksperyment 3} którego celem było porównanie entropii krzyżowej z
+    błędem średniokwadratowym (\texttt{MSE}).
     \item \textbf{Zbiór \texttt{data.three\_gauss}} — klasyfikacja wieloklasowa (3 klasy). Skupiska powstały przez nałożenie na siebie
     dwuwymiarowych rozkładów gaussowskich (Rysunek~\ref{fig:dataset_three_gauss}). Kluczową cechą tego zbioru jest wyraźne
     nakładanie się rozkładów klas na środku przestrzeni. Ze względu na to przenikanie się klas, zbiór jest trudniejszy w klasyfikacji
@@ -410,11 +410,12 @@ się na rozmiarze $N = 100$.
 \subsection{Eksperyment 1 - Funkcje aktywacji w warstwach ukrytych}
 \label{sec:K1}
 
-W ramach eksperymentu zbadano wpływ doboru funkcji aktywacji w warstwach ukrytych 
-(\texttt{Sigmoid}, \texttt{Tanh}, \texttt{ReLU}) na przebieg uczenia,
+W ramach eksperymentu zbadano wpływ doboru funkcji aktywacji w warstwach ukrytych (\texttt{Sigmoid}, \texttt{Tanh}, \texttt{ReLU}) na przebieg uczenia,
 stabilność wag oraz finalny przebieg granic decyzyjnych. 
-Eksperymenty przeprowadzono na jednej architekturze $[2, 32, 16, C]$ ($C=1$ dla klasyfikacji binarnej, $C=3$ dla wieloklasowej)
-przy użyciu optymalizatora \texttt{SGD} ($\eta = 0.05$, 150 epok) dla 10 różnych ziaren losowości.
+Inicjalizację wag dobrano pod kątem badanej funkcji aktywacji dobrano następująco \cite{he_xavier_init}:
+dla aktywacji nasycających (\texttt{Sigmoid}, \texttt{Tanh}) zastosowano inicjalizację Xaviera,
+natomiast dla \texttt{ReLU} inicjalizację He. Taka sama zasada doboru inicjalizacji odpowiadającej aktywacji została zachowana w pozostałych eksperymentach klasyfikacyjnych.
+Eksperymenty przeprowadzono na jednej architekturze $[2, 32, 16, C]$ ($C=1$ dla klasyfikacji binarnej, $C=3$ dla wieloklasowej) przy użyciu optymalizatora \texttt{SGD} ($\eta = 0.05$, 150 epok) dla 10 różnych ziaren losowości.
 
 Podsumowanie uzyskanych dokładności (\textit{accuracy}) predykcji na zbiorze uczącym i testowym przedstawiono w Tabeli \ref{tab:k1_accuracy}.
 
@@ -442,7 +443,6 @@ Podsumowanie uzyskanych dokładności (\textit{accuracy}) predykcji na zbiorze u
 
 W zadaniu binarnym modele z aktywacją \texttt{Tanh} oraz \texttt{ReLU} zdołały w $100\%$ nauczyć się rozpoznawać klasy na zbiorach treningowych
 i dobrze generalizują to na zbiorze testowym ($99.40\%$ dla \texttt{Tanh} oraz $99.20\%$ dla \texttt{ReLU}).
-Funkcja \texttt{Sigmoid} zbiegała wyraźnie wolniej ze względu na nasycenie gradientu (stosunkowo mała wartość pochodnej funkcji sigma).
 
 Na Rysunku~\ref{fig:k1_simple_accuracy} można zaobserwować, że dokładność sieci z aktywacją \texttt{Sigmoid} znacznie wolniej zbiega do 1.
 Dodatkowo trajektoria krzywej jest bardziej chaotyczna i wykazuje większe odchylenie standardowe (na badanej próbce 10 ziaren losowych), co sugeruje,
@@ -476,7 +476,8 @@ podczas gdy strata w modelu \texttt{Sigmoid} maleje powoli i jednostajnie przez 
     \label{fig:k1_simple_loss}
 \end{figure}
 
-Zmiany pierwszej wagi $w_{0,0}$ oraz biasu $b_0$ pierwszego neuronu (Rysunek~\ref{fig:k1_simple_neuron_weights}) są stabilne i nie ma w nich oscylacji.
+Zmiany pierwszej wagi $w_{0,0}$ oraz biasu $b_0$ pierwszego neuronu dla funkcji \texttt{ReLU} i \texttt{Tanh} (Rysunek~\ref{fig:k1_simple_neuron_weights}) są stabilne i nie ma w nich większych oscylacji.
+Natomiast dla funkcji \texttt{Sigmoid}, sieć nie ustabilizowała się jeszcze w czasie 150 epok i wagi wciąż ewoluują.
 
 \begin{figure}[H]
     \centering
@@ -512,7 +513,8 @@ podczas gdy \texttt{Sigmoid} początkowo mocno oscyluje i potrzebuje ponad 80 ep
     \label{fig:k1_three_gauss_accuracy}
 \end{figure}
 
-Przebieg funkcji straty (Rysunek~\ref{fig:k1_three_gauss_loss}) oraz ewolucja parametrów pierwszego neuronu (Rysunek~\ref{fig:k1_three_gauss_neuron_weights}) obrazują analogiczne zjawiska szybkiej zbieżności i stabilności jak w przypadku zbioru \texttt{data.simple}.
+Przebieg funkcji straty (Rysunek~\ref{fig:k1_three_gauss_loss}) oraz ewolucja parametrów pierwszego neuronu (Rysunek~\ref{fig:k1_three_gauss_neuron_weights}) 
+obrazują analogiczne zjawiska (zbieżność/dalsza zmiana) jak w przypadku zbioru \texttt{data.simple}.
 
 \begin{figure}[H]
     \centering
@@ -536,7 +538,11 @@ Podsumowując wyniki:
     która cierpi na spowolnienie uczenia wywołane nasyceniem gradientu.
     \item Kształt wyznaczonych granic decyzyjnych odzwierciedla charakter funkcji aktywacji (odcinkowo liniowe dla \texttt{ReLU} vs gładkie dla \texttt{Tanh}).
     W zbiorze \texttt{data.three\_gauss} w którym klasy się nakładają wszystkie modele osiągają zbliżoną skuteczność ograniczoną górną granicą ok. $93\%$.
-    \item Zmiana wyszczególnionych wag i biasów w sieci przebiega stabilnie we wszystkich wariantach, potwierdzając że implementacja jest poprawna. W kolejnych eksperymentach te wykresy będą pominietę dla większej czytelności.
+    \item Zmiana wyszczególnionych wag i biasów w sieci odzwierciedla charakterystykę uczenia dla danej sieci. 
+    Spowolnienie lub zatrzymania zmian wagi/biasu w sieci zachodzi w chwili gdy sieć dopasowała się do zbioru treningowego (jak w przypadku \texttt{ReLU} i \texttt{Tanh}).
+    Ciągła zmiana wagi/biasu (jak dla \texttt{Sigmoid}) oznacza że sieć wciąż jest poprawiana i nie zdążyła zbiec. W kolejnych eksperymentach
+    wykres wag i biasów jest pominięty na rzecz większej przejrzystości (wykresy byłyby bardzo podobne).
+    
 \end{itemize}
 
 \subsection{Eksperyment 2 - Architektura sieci}
@@ -757,8 +763,9 @@ podczas gdy \texttt{MSE} przy $\eta = 0.01$ uczy się wolno i z większym rozrzu
 \end{figure}
 
 Różnice w dynamice uczenia wynikają bezpośrednio z postaci początkowego sygnału błędu $\boldsymbol{\delta}^{[L]}$ generowanego na wyjściu sieci (Rysunek~\ref{fig:k3_simple_weight_dynamics}).
-Na wykresie wartości na osi rzędnych (osi $Y$) przedstawiono w skali logarytmicznej, co pozwala uwidocznić różnice rzędów wielkości w sile propagowanego gradientu.
-W procedurze propagacji wstecznej zmiana funkcji straty i aktywacji wyjściowej wpływa wyłącznie na początkowy sygnał błędu $\boldsymbol{\delta}^{[L]}$, podczas gdy pozostała część propagacji wstecznej (aktualizacja wag $\partial \mathcal{L} / \partial \boldsymbol{W}^{[l]} = \boldsymbol{\delta}^{[l]} (\boldsymbol{a}^{[l-1]})^T$ oraz sygnały warstw ukrytych) pozostaje nienaruszona.
+Na wykresie wartości na osi $y$ przedstawiono w skali logarytmicznej, co obrazuję różnice rzędów wielkości w sile propagowanego gradientu.
+W procedurze propagacji wstecznej zmiana funkcji straty i aktywacji wyjściowej wpływa wyłącznie na początkowy sygnał błędu $\boldsymbol{\delta}^{[L]}$,
+podczas gdy pozostała część propagacji wstecznej (aktualizacja wag $\partial \mathcal{L} / \partial \boldsymbol{W}^{[l]} = \boldsymbol{\delta}^{[l]} (\boldsymbol{a}^{[l-1]})^T$ oraz sygnały warstw ukrytych) pozostaje nienaruszona.
 
 W zależności od doboru funkcji celu sygnał błędu na wyjściu przyjmuje postać:
 \begin{align*}
@@ -767,8 +774,8 @@ W zależności od doboru funkcji celu sygnał błędu na wyjściu przyjmuje post
 \end{align*}
 
 Dla błędu średniokwadratowego (\texttt{MSE}) w sygnale pojawia się nasycający czynnik $\hat{\boldsymbol{y}} \odot (\mathbf{1} - \hat{\boldsymbol{y}})$.
-Gdy prawdopodobieństwo wyjściowe $\hat{\boldsymbol{y}}$ zbliża się do $0$ lub $1$, czynnik ten dąży do zera, co drastycznie tłumi gradient o rzędy wielkości (co widać na wykresie w skali $\log$).
-Dla \texttt{Cross-Entropy} zjawisko nasycenia nie występuje, a wielkość błędu zależy wprost od różnicy $(\hat{\boldsymbol{y}} - \boldsymbol{y})$, co zapewnia stabilne i dynamiczne uczenie nawet przy małym kroku $\eta = 0.01$.
+Gdy prawdopodobieństwo wyjściowe $\hat{\boldsymbol{y}}$ zbliża się do $0$ lub $1$, czynnik ten dąży do zera, co znacząco tłumi gradient.
+Dla \texttt{Cross-Entropy} zjawisko nasycenia nie występuje, a wielkość błędu zależy wprost od różnicy $(\hat{\boldsymbol{y}} - \boldsymbol{y})$, co zapewnia stabilne uczenie nawet przy małym kroku $\eta = 0.01$.
 
 \begin{figure}[H]
     \centering
@@ -820,7 +827,8 @@ a punkty błędnie zaklasyfikowane leżą wyłącznie w rejonie wzajemnego przen
     \label{fig:k3_three_gauss_boundaries}
 \end{figure}
 
-Przebieg dokładności klasyfikacji (Rysunek~\ref{fig:k3_three_gauss_accuracy}) oraz funkcji straty (Rysunek~\ref{fig:k3_three_gauss_loss}) w problemie wieloklasowym wykazuje zbieżne tendencje: \texttt{MSE} przy małym kroku $\eta = 0.01$ uczy się wolniej, lecz przy $\eta \ge 0.05$ osiąga skuteczność porównywalną z \texttt{Cross-Entropy}.
+Dokładności klasyfikacji (Rysunek~\ref{fig:k3_three_gauss_accuracy}) oraz funkcji straty (Rysunek~\ref{fig:k3_three_gauss_loss}) w problemie wieloklasowym zbiegają do pewnej granicy: 
+\texttt{MSE} przy małym kroku $\eta = 0.01$ uczy się wolniej, lecz przy $\eta \ge 0.05$ osiąga skuteczność porównywalną z \texttt{Cross-Entropy}.
 
 \begin{figure}[H]
     \centering
@@ -836,7 +844,8 @@ Przebieg dokładności klasyfikacji (Rysunek~\ref{fig:k3_three_gauss_accuracy}) 
     \label{fig:k3_three_gauss_loss}
 \end{figure}
 
-Dynamika normy sygnału błędu wyjścia $\|\boldsymbol{\delta}^{[L]}\|$ przedstawiona na Rysunku~\ref{fig:k3_three_gauss_weight_dynamics} (w skali logarytmicznej) potwierdza analogiczne tłumienie gradientu wyjściowego dla funkcji \texttt{MSE} w początkowych epokach treningu na zbiorze wieloklasowym.
+Norma sygnału błędu wyjścia $\|\boldsymbol{\delta}^{[L]}\|$ przedstawiona na Rysunku~\ref{fig:k3_three_gauss_weight_dynamics} (w skali logarytmicznej)
+potwierdza analogiczne tłumienie gradientu wyjściowego dla funkcji \texttt{MSE} w początkowych epokach treningu na zbiorze wieloklasowym.
 
 \begin{figure}[H]
     \centering
@@ -857,9 +866,12 @@ Podsumowując porównanie \texttt{Cross-Entropy} oraz błędu średniokwadratowe
 \subsection{Podsumowanie i wnioski z części klasyfikacyjnej}
 
 \begin{itemize}
-    \item \textbf{Funkcja aktywacji}: Najlepsze rezultaty zapewnia funkcja \texttt{ReLU} (w połączeniu z inicjalizacją \texttt{He} - zgodnie z \cite{he_xavier_init}). Zabezpiecza ona model przed zanikaniem gradientu i gwarantuje najszybszą zbieżność w porównaniu do nasycającej funkcji funkcji \texttt{Sigmoid}.
-    \item \textbf{Architektura sieci}: Zwiększenie liczby warstw ukrytych przyspiesza proces uczenia i pozwala wyznaczać dokładniejsze granice decyzyjne. Najlepszym kompromisem pomiędzy rozmiarem sieci a dokładnością okazała się architektura 2-warstwowa ($[2, 32, 16]$) — dalsze pogłębianie modelu przynosiło niewielki zysk na zbiorze testowym.
-    \item \textbf{Funkcja straty}: Entropia krzyżowa (\texttt{Cross-Entropy}) jest lepszym wyborem niż \texttt{MSE} dla problemu klasyfikacji. Eliminuje problem nasycenia gradientu na wyjściu z aktywacją \texttt{Sigmoid} lub \texttt{Softmax}, co zapewnia szybkie i stabilne uczenie już przy małym kroku $\eta$.
+    \item \textbf{Funkcja aktywacji}: Najlepsze rezultaty zapewnia funkcja \texttt{ReLU} (w połączeniu z inicjalizacją \texttt{He} - zgodnie z \cite{he_xavier_init})
+    oraz \texttt{Tanh} (inicjalizacja \texttt{Xavier}). Zabezpieczają one model przed zanikaniem gradientu i gwarantuje najszybszą zbieżność w porównaniu do funkcji \texttt{Sigmoid}.
+    \item \textbf{Architektura sieci}: Zwiększenie liczby warstw ukrytych przyspiesza proces uczenia i pozwala wyznaczać dokładniejsze granice decyzyjne.
+    Najlepszym kompromisem pomiędzy rozmiarem sieci a dokładnością okazała się architektura 2-warstwowa ($[2, 32, 16]$) — dalsze pogłębianie modelu przynosiło niewielki zysk na zbiorze testowym.
+    \item \textbf{Funkcja straty}: Entropia krzyżowa (\texttt{Cross-Entropy}) jest lepszym wyborem niż \texttt{MSE} dla problemu klasyfikacji.
+    Eliminuje problem nasycenia gradientu na wyjściu z aktywacją \texttt{Sigmoid} lub \texttt{Softmax}, co zapewnia szybkie i stabilne uczenie już przy małym kroku $\eta$.
 \end{itemize}
 
 % ==============================================================================
