@@ -23,7 +23,7 @@ if __package__ is None or __package__ == "":
         load_classification_data,
         load_regression_data,
     )
-    from src.py_nn1 import NeuronTrajectory
+    from py_nn1 import NeuronTrajectory
 else:
     from .data_loader import (
         ClassificationDataset,
@@ -31,7 +31,7 @@ else:
         load_classification_data,
         load_regression_data,
     )
-    from src.py_nn1 import NeuronTrajectory
+    from py_nn1 import NeuronTrajectory
 
 
 def _resolve_classification_results_dir() -> Path:
