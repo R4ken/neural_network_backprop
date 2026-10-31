@@ -3,12 +3,15 @@
 This module provides dataset loaders for the benchmarks defined in data/p1/:
 - Regression: 'data.activation' and 'data.cube'
 - Classification: 'data.simple' and 'data.three_gauss'
+
+MNIST is loaded from local IDX files in data/mnist/arr/.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+import struct
 from typing import Iterator, Literal
 
 import numpy as np
@@ -70,6 +73,90 @@ class ClassificationDataset:
     def __iter__(self) -> Iterator[FloatArray]:
         """Supports 4-tuple unpacking: x_tr, y_tr, x_te, y_te = dataset."""
         return iter((self.x_train, self.y_train, self.x_test, self.y_test))
+
+
+def _read_idx(path: Path) -> NDArray[np.uint8]:
+    """Reads MNIST image or label IDX files, validating headers and payloads."""
+    with path.open("rb") as file:
+        header = file.read(8)
+        if len(header) != 8:
+            raise ValueError(f"Incomplete IDX header: {path}")
+        magic, count = struct.unpack(">II", header)
+
+        if magic == 2051:
+            dimensions = file.read(8)
+            if len(dimensions) != 8:
+                raise ValueError(f"Incomplete IDX image header: {path}")
+            rows, columns = struct.unpack(">II", dimensions)
+            if (rows, columns) != (28, 28):
+                raise ValueError(f"Expected 28x28 MNIST images in {path}, got {rows}x{columns}.")
+            shape = (count, rows, columns)
+            expected_size = count * rows * columns
+        elif magic == 2049:
+            shape = (count,)
+            expected_size = count
+        else:
+            raise ValueError(f"Unsupported IDX magic number {magic} in {path}.")
+
+        payload = file.read()
+
+    if len(payload) != expected_size:
+        raise ValueError(
+            f"Invalid IDX payload size in {path}: expected {expected_size} bytes, "
+            f"got {len(payload)}."
+        )
+    return np.frombuffer(payload, dtype=np.uint8).reshape(shape)
+
+
+def load_mnist_data(data_dir: Path | str | None = None) -> ClassificationDataset:
+    """Loads local MNIST splits as normalized features and one-hot targets.
+
+    Args:
+        data_dir: Directory containing the four uncompressed IDX files. Defaults
+            to the repository's data/mnist/arr directory.
+
+    Returns:
+        A ClassificationDataset with features of shape (N, 784) in [0, 1],
+        one-hot targets of shape (N, 10), and integer labels of shape (N,).
+    """
+    root_dir = (
+        Path(data_dir) if data_dir is not None
+        else Path(__file__).resolve().parents[2] / "data" / "mnist" / "arr"
+    )
+    train_images = _read_idx(root_dir / "train-images.idx3-ubyte")
+    train_labels = _read_idx(root_dir / "train-labels.idx1-ubyte")
+    test_images = _read_idx(root_dir / "t10k-images.idx3-ubyte")
+    test_labels = _read_idx(root_dir / "t10k-labels.idx1-ubyte")
+
+    for split, images, labels in (
+        ("train", train_images, train_labels),
+        ("test", test_images, test_labels),
+    ):
+        if images.ndim != 3 or labels.ndim != 1:
+            raise ValueError(f"Expected image and label IDX formats for the {split} split.")
+        if len(images) != len(labels):
+            raise ValueError(f"MNIST {split} image and label counts do not match.")
+        if np.any(labels > 9):
+            raise ValueError(f"MNIST {split} labels must be in the range 0–9.")
+
+    train_labels = train_labels.astype(np.int64)
+    test_labels = test_labels.astype(np.int64)
+    x_train = train_images.reshape(len(train_images), 784).astype(float)
+    x_test = test_images.reshape(len(test_images), 784).astype(float)
+    x_train /= 255.0
+    x_test /= 255.0
+
+    return ClassificationDataset(
+        x_train=x_train,
+        y_train=to_one_hot(train_labels, num_classes=10),
+        x_test=x_test,
+        y_test=to_one_hot(test_labels, num_classes=10),
+        train_labels=train_labels,
+        test_labels=test_labels,
+        num_classes=10,
+        name="mnist",
+        n_samples=len(train_images),
+    )
 
 
 def _resolve_data_dir(data_dir: Path | str | None = None) -> Path:
