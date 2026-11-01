@@ -8,6 +8,7 @@ This module provides plotting functions adhering to project requirements:
 
 from __future__ import annotations
 
+import csv
 from pathlib import Path
 from typing import Any, Literal
 import matplotlib.pyplot as plt
@@ -44,6 +45,13 @@ def _resolve_classification_results_dir() -> Path:
 def _resolve_regression_results_dir() -> Path:
     """Locates or creates the default results directory for regression."""
     results_dir = Path(__file__).resolve().parents[1] / "results" / "regression"
+    results_dir.mkdir(parents=True, exist_ok=True)
+    return results_dir
+
+
+def _resolve_mnist_results_dir() -> Path:
+    """Locates or creates the default results directory for MNIST experiments."""
+    results_dir = Path(__file__).resolve().parents[1] / "results" / "mnist"
     results_dir.mkdir(parents=True, exist_ok=True)
     return results_dir
 
@@ -1461,6 +1469,406 @@ def plot_sample_size_generalization_curve(
 
     fig.suptitle(title, fontsize=13, fontweight="bold")
     fig.tight_layout()
+    fig.savefig(target_path, dpi=150, bbox_inches="tight")
+    plt.close(fig)
+    return target_path
+
+
+def compute_confusion_matrix(
+    y_true: np.ndarray,
+    y_pred: np.ndarray,
+    num_classes: int = 10,
+) -> np.ndarray:
+    """Computes a multi-class confusion matrix of shape (num_classes, num_classes).
+
+    Row indices correspond to true class labels; column indices correspond to
+    predicted class labels. Supports both 1D class labels/indices and 2D one-hot
+    arrays or probability distributions.
+
+    Args:
+        y_true: Ground truth target labels (1D) or one-hot vectors (2D).
+        y_pred: Predicted class labels (1D) or probability distributions (2D).
+        num_classes: Total number of classes (defaults to 10 for MNIST).
+
+    Returns:
+        np.ndarray of shape (num_classes, num_classes) with integer counts.
+    """
+    if y_true.ndim > 1 and y_true.shape[1] > 1:
+        y_true_indices = np.argmax(y_true, axis=1)
+    else:
+        y_true_indices = np.asarray(y_true).ravel().astype(int)
+
+    if y_pred.ndim > 1 and y_pred.shape[1] > 1:
+        y_pred_indices = np.argmax(y_pred, axis=1)
+    else:
+        y_pred_indices = np.asarray(y_pred).ravel().astype(int)
+
+    cm = np.zeros((num_classes, num_classes), dtype=int)
+    for t, p in zip(y_true_indices, y_pred_indices):
+        if 0 <= t < num_classes and 0 <= p < num_classes:
+            cm[t, p] += 1
+    return cm
+
+
+def compute_confusion_matrix_metrics(
+    cm: np.ndarray,
+    class_names: list[str] | None = None,
+) -> dict[str, Any]:
+    """Computes per-class and aggregated classification metrics from a confusion matrix.
+
+    Metrics computed per class:
+        - TP: True Positives
+        - FP: False Positives
+        - FN: False Negatives
+        - TN: True Negatives
+        - TPR (Recall / Sensitivity): TP / (TP + FN)
+        - PPV (Precision): TP / (TP + FP)
+        - TNR (Specificity): TN / (TN + FP)
+        - FPR (False Positive Rate): FP / (FP + TN)
+        - F1-Score: 2 * (PPV * TPR) / (PPV + TPR)
+        - Support: Number of true instances (TP + FN)
+
+    Aggregate metrics:
+        - Overall Accuracy: sum(diag(cm)) / total
+        - Macro-averaged metrics (unweighted mean across classes)
+        - Weighted-averaged metrics (weighted by class support)
+
+    Args:
+        cm: Confusion matrix of shape (num_classes, num_classes).
+        class_names: Optional labels for each class. Defaults to 0, 1, ..., C-1.
+
+    Returns:
+        Structured dictionary containing all computed metrics.
+    """
+    num_classes = cm.shape[0]
+    if class_names is None:
+        class_names = [str(i) for i in range(num_classes)]
+
+    total_samples = int(np.sum(cm))
+    per_class: dict[str, dict[str, Any]] = {}
+
+    tpr_list: list[float] = []
+    ppv_list: list[float] = []
+    tnr_list: list[float] = []
+    fpr_list: list[float] = []
+    f1_list: list[float] = []
+    support_list: list[int] = []
+
+    for i in range(num_classes):
+        tp = int(cm[i, i])
+        fn = int(np.sum(cm[i, :]) - tp)
+        fp = int(np.sum(cm[:, i]) - tp)
+        tn = int(total_samples - tp - fn - fp)
+        support = tp + fn
+
+        tpr = float(tp / (tp + fn)) if (tp + fn) > 0 else 0.0
+        ppv = float(tp / (tp + fp)) if (tp + fp) > 0 else 0.0
+        tnr = float(tn / (tn + fp)) if (tn + fp) > 0 else 0.0
+        fpr = float(fp / (fp + tn)) if (fp + tn) > 0 else 0.0
+        f1 = float(2.0 * ppv * tpr / (ppv + tpr)) if (ppv + tpr) > 0 else 0.0
+
+        c_name = class_names[i]
+        per_class[c_name] = {
+            "class": c_name,
+            "tp": tp,
+            "fp": fp,
+            "fn": fn,
+            "tn": tn,
+            "support": support,
+            "tpr": tpr,
+            "ppv": ppv,
+            "tnr": tnr,
+            "fpr": fpr,
+            "f1_score": f1,
+        }
+
+        tpr_list.append(tpr)
+        ppv_list.append(ppv)
+        tnr_list.append(tnr)
+        fpr_list.append(fpr)
+        f1_list.append(f1)
+        support_list.append(support)
+
+    overall_accuracy = float(np.trace(cm) / total_samples) if total_samples > 0 else 0.0
+
+    macro_avg = {
+        "tpr": float(np.mean(tpr_list)),
+        "ppv": float(np.mean(ppv_list)),
+        "tnr": float(np.mean(tnr_list)),
+        "fpr": float(np.mean(fpr_list)),
+        "f1_score": float(np.mean(f1_list)),
+    }
+
+    total_support = sum(support_list)
+    if total_support > 0:
+        weights = np.array(support_list, dtype=float) / total_support
+        weighted_avg = {
+            "tpr": float(np.sum(np.array(tpr_list) * weights)),
+            "ppv": float(np.sum(np.array(ppv_list) * weights)),
+            "tnr": float(np.sum(np.array(tnr_list) * weights)),
+            "fpr": float(np.sum(np.array(fpr_list) * weights)),
+            "f1_score": float(np.sum(np.array(f1_list) * weights)),
+        }
+    else:
+        weighted_avg = macro_avg.copy()
+
+    return {
+        "total_samples": total_samples,
+        "overall_accuracy": overall_accuracy,
+        "per_class": per_class,
+        "macro_avg": macro_avg,
+        "weighted_avg": weighted_avg,
+    }
+
+
+def save_metrics_report(
+    metrics: dict[str, Any],
+    csv_path: Path | str | None = None,
+) -> tuple[Path, Path]:
+    """Saves classification metrics report to both JSON and CSV files.
+
+    Args:
+        metrics: Dictionary returned by compute_confusion_matrix_metrics.
+        csv_path: Destination path for the CSV file. Defaults to
+            'experiments/results/mnist/mnist_confusion_matrix_metrics.csv'.
+
+    Returns:
+        Tuple of (json_path, csv_path).
+    """
+    results_dir = _resolve_mnist_results_dir()
+    csv_target = results_dir / "mnist_confusion_matrix_metrics.csv" if csv_path is None else Path(csv_path)
+
+    csv_target.parent.mkdir(parents=True, exist_ok=True)
+
+    fieldnames = [
+        "class",
+        "support",
+        "tp",
+        "fp",
+        "fn",
+        "tn",
+        "tpr_recall",
+        "ppv_precision",
+        "tnr_specificity",
+        "fpr",
+        "f1_score",
+    ]
+    with open(csv_target, "w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+        for cls_name, vals in metrics["per_class"].items():
+            writer.writerow({
+                "class": cls_name,
+                "support": vals["support"],
+                "tp": vals["tp"],
+                "fp": vals["fp"],
+                "fn": vals["fn"],
+                "tn": vals["tn"],
+                "tpr_recall": f"{vals['tpr']:.4f}",
+                "ppv_precision": f"{vals['ppv']:.4f}",
+                "tnr_specificity": f"{vals['tnr']:.4f}",
+                "fpr": f"{vals['fpr']:.4f}",
+                "f1_score": f"{vals['f1_score']:.4f}",
+            })
+        macro = metrics["macro_avg"]
+        writer.writerow({
+            "class": "macro_avg",
+            "support": metrics["total_samples"],
+            "tp": "",
+            "fp": "",
+            "fn": "",
+            "tn": "",
+            "tpr_recall": f"{macro['tpr']:.4f}",
+            "ppv_precision": f"{macro['ppv']:.4f}",
+            "tnr_specificity": f"{macro['tnr']:.4f}",
+            "fpr": f"{macro['fpr']:.4f}",
+            "f1_score": f"{macro['f1_score']:.4f}",
+        })
+        weighted = metrics["weighted_avg"]
+        writer.writerow({
+            "class": "weighted_avg",
+            "support": metrics["total_samples"],
+            "tp": "",
+            "fp": "",
+            "fn": "",
+            "tn": "",
+            "tpr_recall": f"{weighted['tpr']:.4f}",
+            "ppv_precision": f"{weighted['ppv']:.4f}",
+            "tnr_specificity": f"{weighted['tnr']:.4f}",
+            "fpr": f"{weighted['fpr']:.4f}",
+            "f1_score": f"{weighted['f1_score']:.4f}",
+        })
+
+    return csv_target
+
+
+def plot_confusion_matrix(
+    cm: np.ndarray,
+    class_names: list[str] | None = None,
+    save_path: Path | str | None = None,
+    title: str | None = None,
+    cmap: str = "Blues",
+) -> Path:
+    """Plots a confusion matrix heatmap displaying raw integer counts in each cell and a colorbar.
+
+    Args:
+        cm: Confusion matrix of shape (num_classes, num_classes).
+        class_names: Names for each class. Defaults to 0, 1, ..., num_classes-1.
+        save_path: Destination path for the saved image. Defaults to
+            'experiments/results/mnist/mnist_confusion_matrix.png'.
+        title: Main title in Polish.
+        cmap: Matplotlib colormap name.
+
+    Returns:
+        Path to the saved figure file.
+    """
+    if save_path is None:
+        target_path = _resolve_mnist_results_dir() / "mnist_confusion_matrix.png"
+    else:
+        target_path = Path(save_path)
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+
+    num_classes = cm.shape[0]
+    if class_names is None:
+        class_names = [str(i) for i in range(num_classes)]
+
+    fig, ax = plt.subplots(figsize=(8.5, 7.5))
+    im = ax.imshow(cm, interpolation="nearest", cmap=cmap)
+
+    cbar = fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
+    cbar.set_label("Liczba próbek", fontsize=11)
+
+    thresh = cm.max() / 2.0
+    for i in range(num_classes):
+        for j in range(num_classes):
+            val = int(cm[i, j])
+            color = "white" if val > thresh else "black"
+            ax.text(
+                j,
+                i,
+                f"{val:d}",
+                ha="center",
+                va="center",
+                color=color,
+                fontsize=9.5,
+                fontweight="normal",
+            )
+
+    tick_marks = np.arange(num_classes)
+    ax.set_xticks(tick_marks)
+    ax.set_yticks(tick_marks)
+    ax.set_xticklabels(class_names, fontsize=10)
+    ax.set_yticklabels(class_names, fontsize=10)
+
+    ax.set_xlabel("Przewidywana klasa (klasa predykcji)", fontsize=11, fontweight="bold")
+    ax.set_ylabel("Rzeczywista klasa (etykieta prawdziwa)", fontsize=11, fontweight="bold")
+
+    if title is None:
+        title = "Macierz pomyłek (Confusion Matrix) – Zbiór testowy MNIST"
+    ax.set_title(title, fontsize=13, fontweight="bold", pad=12)
+
+    fig.tight_layout()
+    fig.savefig(target_path, dpi=150, bbox_inches="tight")
+    plt.close(fig)
+    return target_path
+
+
+def plot_training_and_validation_curves(
+    history: dict[str, list[float]],
+    save_path: Path | str | None = None,
+    title: str | None = None,
+) -> Path:
+    """Plots training and validation loss & accuracy curves side-by-side in a 1x2 panel layout.
+
+    Args:
+        history: Dictionary returned by model.fit containing loss and metric histories.
+        save_path: Destination path for saving the figure. Defaults to
+            'experiments/results/mnist/mnist_learning_curves.png'.
+        title: Main title in Polish.
+
+    Returns:
+        Path to the saved figure file.
+    """
+    if save_path is None:
+        target_path = _resolve_mnist_results_dir() / "mnist_learning_curves.png"
+    else:
+        target_path = Path(save_path)
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+
+    n_epochs = len(history.get("loss", []))
+    epochs = np.arange(1, n_epochs + 1)
+
+    fig, (ax_loss, ax_acc) = plt.subplots(1, 2, figsize=(13, 5))
+
+    # Loss panel (left)
+    if "loss" in history and len(history["loss"]) > 0:
+        ax_loss.plot(
+            epochs,
+            history["loss"],
+            label="Strata ucząca (Train loss)",
+            color="#1f77b4",
+            linewidth=2.0,
+        )
+    if "val_loss" in history and len(history["val_loss"]) > 0:
+        ax_loss.plot(
+            epochs,
+            history["val_loss"],
+            label="Strata walidacyjna (Val loss)",
+            color="#ff7f0e",
+            linewidth=2.0,
+            linestyle="--",
+        )
+
+    ax_loss.set_title("Krzywa funkcji straty (Loss)", fontsize=12, fontweight="bold")
+    ax_loss.set_xlabel("Epoka", fontsize=11)
+    ax_loss.set_ylabel("Wartość straty", fontsize=11)
+    ax_loss.grid(True, linestyle="--", alpha=0.5)
+    ax_loss.legend(loc="best", fontsize=10)
+
+    # Accuracy panel (right)
+    has_acc = "accuracy" in history and len(history["accuracy"]) > 0
+    has_val_acc = "val_accuracy" in history and len(history["val_accuracy"]) > 0
+
+    if has_acc:
+        acc_vals = (
+            np.array(history["accuracy"]) * 100.0
+            if np.max(history["accuracy"]) <= 1.0
+            else np.array(history["accuracy"])
+        )
+        ax_acc.plot(
+            epochs,
+            acc_vals,
+            label="Dokładność ucząca (Train acc)",
+            color="#1f77b4",
+            linewidth=2.0,
+        )
+    if has_val_acc:
+        val_acc_vals = (
+            np.array(history["val_accuracy"]) * 100.0
+            if np.max(history["val_accuracy"]) <= 1.0
+            else np.array(history["val_accuracy"])
+        )
+        ax_acc.plot(
+            epochs,
+            val_acc_vals,
+            label="Dokładność walidacyjna (Val acc)",
+            color="#2ca02c",
+            linewidth=2.0,
+            linestyle="--",
+        )
+
+    ax_acc.set_title("Krzywa dokładności (Accuracy)", fontsize=12, fontweight="bold")
+    ax_acc.set_xlabel("Epoka", fontsize=11)
+    ax_acc.set_ylabel("Dokładność [%]", fontsize=11)
+    ax_acc.grid(True, linestyle="--", alpha=0.5)
+    if has_acc or has_val_acc:
+        ax_acc.legend(loc="lower right", fontsize=10)
+
+    if title is None:
+        title = "Przebieg uczenia modelu MLP na zbiorze MNIST"
+    fig.suptitle(title, fontsize=14, fontweight="bold")
+    fig.tight_layout()
+
     fig.savefig(target_path, dpi=150, bbox_inches="tight")
     plt.close(fig)
     return target_path
