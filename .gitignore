@@ -20,3 +20,11 @@ report/*.log
 report/*.synctex.gz
 report/*.toc
 report/*.out
+
+mnist_report/*.aux
+mnist_report/*.fdb_latexmk
+mnist_report/*.fls
+mnist_report/*.log
+mnist_report/*.synctex.gz
+mnist_report/*.toc
+mnist_report/*.out

@@ -1,5 +1,8 @@
+import argparse
 import sys
 from pathlib import Path
+import matplotlib.pyplot as plt
+import numpy as np
 
 # Support running as a standalone script or importing from project root
 _repo_root = Path(__file__).resolve().parents[1]
@@ -25,7 +28,79 @@ from py_nn1 import (
     compute_multiclass_accuracy,
     set_seed
 )
-import numpy as np
+
+
+def plot_misclassified_samples(
+    x_test: np.ndarray,
+    y_true: np.ndarray,
+    y_pred: np.ndarray,
+    target_pairs: list[tuple[int, int]] | None = None,
+    save_path: Path | str | None = None,
+) -> Path:
+    """Finds and plots misclassified test samples side-by-side in a 1x3 panel.
+
+    Args:
+        x_test: Test features of shape (N, 784).
+        y_true: True labels (one-hot matrix or 1D array of class indices).
+        y_pred: Predicted class probabilities (N, 10) or 1D array of predicted class indices.
+        target_pairs: List of (true_class, pred_class) tuples to prioritize displaying.
+            Defaults to [(4, 9), (5, 3), (7, 2)].
+        save_path: Destination path for saving the figure.
+
+    Returns:
+        Path to the saved figure file.
+    """
+    if target_pairs is None:
+        target_pairs = [(4, 9), (5, 3), (7, 2)]
+
+    true_labels = np.argmax(y_true, axis=1) if y_true.ndim == 2 else np.asarray(y_true)
+    pred_labels = np.argmax(y_pred, axis=1) if y_pred.ndim == 2 else np.asarray(y_pred)
+
+    chosen_indices: list[int] = []
+    chosen_pairs: list[tuple[int, int]] = []
+
+    # 1. Search for specified target pairs
+    for t_cls, p_cls in target_pairs:
+        matches = np.where((true_labels == t_cls) & (pred_labels == p_cls))[0]
+        if len(matches) > 0:
+            chosen_indices.append(int(matches[0]))
+            chosen_pairs.append((t_cls, p_cls))
+
+    # 2. If fewer than 3 pairs found, fill with other misclassified samples
+    if len(chosen_indices) < 3:
+        all_misclassified = np.where(true_labels != pred_labels)[0]
+        for idx in all_misclassified:
+            if idx not in chosen_indices:
+                chosen_indices.append(int(idx))
+                chosen_pairs.append((int(true_labels[idx]), int(pred_labels[idx])))
+                if len(chosen_indices) == 3:
+                    break
+
+    fig, axes = plt.subplots(1, len(chosen_indices), figsize=(9, 3.2))
+    if len(chosen_indices) == 1:
+        axes = [axes]
+
+    for ax, idx, (t_cls, p_cls) in zip(axes, chosen_indices, chosen_pairs):
+        img = x_test[idx].reshape(28, 28)
+        ax.imshow(img, cmap="gray", interpolation="nearest")
+        ax.set_title(
+            f"Prawdziwa: {t_cls}  |  Predykcja: {p_cls}",
+            fontsize=11,
+            fontweight="bold",
+            pad=8
+        )
+        ax.set_xticks([])
+        ax.set_yticks([])
+
+    plt.tight_layout()
+    if save_path is None:
+        target_path = Path(__file__).resolve().parent / "results" / "mnist" / "mnist_misclassified_examples.png"
+    else:
+        target_path = Path(save_path)
+    target_path.parent.mkdir(parents=True, exist_ok=True)
+    plt.savefig(target_path, dpi=300, bbox_inches="tight")
+    plt.close(fig)
+    return target_path
 
 
 def evaluate_and_plot_mnist(
@@ -43,6 +118,7 @@ def evaluate_and_plot_mnist(
         3. A 10x10 confusion matrix heatmap on the test set.
         4. Numerical metrics derived from the confusion matrix (TPR, TNR, PPV, FPR, F1, Support)
            saved to both JSON and CSV files.
+        5. Visual examples of misclassified test images (1x3 panel).
 
     Args:
         model: Trained MLP instance.
@@ -79,6 +155,16 @@ def evaluate_and_plot_mnist(
     save_metrics_report(metrics, csv_path=csv_path)
     print(f"Zapisano tabele metryk w formacie CSV: {csv_path}")
 
+    # 5. Plot misclassified sample examples
+    misclassified_path = target_dir / "mnist_misclassified_examples.png"
+    plot_misclassified_samples(
+        x_test=x_test,
+        y_true=y_test,
+        y_pred=probabilities,
+        save_path=misclassified_path,
+    )
+    print(f"Zapisano przykłady błędnie sklasyfikowanych próbek: {misclassified_path}")
+
     # Print formatted table to stdout
     print("\n" + "=" * 80)
     print("MNIST TEST DATASET - WYNIKI NUMERYCZNE DLA MACIERZY POMYLEK (10x10)")
@@ -109,19 +195,77 @@ def evaluate_and_plot_mnist(
         "metrics": metrics,
         "curves_path": curves_path,
         "cm_path": cm_path,
-        "csv_path": csv_path
+        "csv_path": csv_path,
+        "misclassified_path": misclassified_path,
     }
 
 
+def parse_args():
+    parser = argparse.ArgumentParser(description="Trenowanie i ewaluacja modelu MLP na zbiorze MNIST.")
+    parser.add_argument(
+        "--epochs",
+        type=int,
+        default=30,
+        help="Liczba epok treningowych (domyslnie: 30)."
+    )
+    parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=32,
+        help="Rozmiar mini-batcha (domyslnie: 32)."
+    )
+    parser.add_argument(
+        "--learning-rate",
+        type=float,
+        default=0.05,
+        help="Wspolczynnik uczenia SGD (domyslnie: 0.05)."
+    )
+    parser.add_argument(
+        "--train-samples",
+        type=int,
+        default=None,
+        help="Liczba probek uczacych (domyslnie: 55000)."
+    )
+    parser.add_argument(
+        "--eval-samples",
+        type=int,
+        default=5000,
+        help="Liczba probek walidacyjnych (domyslnie: 5000)."
+    )
+    parser.add_argument(
+        "--test-samples",
+        type=int,
+        default=None,
+        help="Liczba probek testowych (domyslnie: wszystkie 10000)."
+    )
+    parser.add_argument(
+        "--quick",
+        action="store_true",
+        help="Tryb szybki (1 epoka, 1000 probek) do testow technicznych."
+    )
+    return parser.parse_args()
+
+
 def main():
+    args = parse_args()
     set_seed(54217)
 
     data = load_mnist_data()
     rng = np.random.default_rng(54217)
     indices = rng.permutation(len(data.x_train))
 
-    eval_indices = indices[:5000]
-    train_indices = indices[5000:]
+    eval_count = 200 if args.quick else args.eval_samples
+    eval_indices = indices[:eval_count]
+    remaining_indices = indices[eval_count:]
+
+    if args.quick:
+        train_count = min(1000, len(remaining_indices))
+        epochs = 1
+    else:
+        train_count = args.train_samples if args.train_samples is not None else len(remaining_indices)
+        epochs = args.epochs
+
+    train_indices = remaining_indices[:train_count]
 
     x_eval = data.x_train[eval_indices]
     y_eval = data.y_train[eval_indices]
@@ -129,7 +273,18 @@ def main():
     x_train = data.x_train[train_indices]
     y_train = data.y_train[train_indices]
 
-    model = MLP.from_dimensions (
+    if args.quick:
+        test_count = 500
+        x_test = data.x_test[:test_count]
+        y_test = data.y_test[:test_count]
+    elif args.test_samples is not None:
+        x_test = data.x_test[:args.test_samples]
+        y_test = data.y_test[:args.test_samples]
+    else:
+        x_test = data.x_test
+        y_test = data.y_test
+
+    model = MLP.from_dimensions(
         layer_dims=[784, 150, 50, 10],
         hidden_activation=ReLU,
         output_activation=Softmax,
@@ -138,27 +293,27 @@ def main():
     )
 
     loss_fn = CategoricalCrossEntropyLoss()
-    optimizer = SGD(learning_rate=0.05)
+    optimizer = SGD(learning_rate=args.learning_rate)
 
     history = model.fit(
         x_train=x_train,
         y_train=y_train,
         loss_fn=loss_fn,
         optimizer=optimizer,
-        epochs=30,
-        batch_size=32,
+        epochs=epochs,
+        batch_size=args.batch_size,
         validation_data=(x_eval, y_eval),
         metrics={"accuracy": compute_multiclass_accuracy},
         verbose=True
     )
 
-    test_loss = model.evaluate(data.x_test, data.y_test, loss_fn)
+    test_loss = model.evaluate(x_test, y_test, loss_fn)
     print(f"Loss: {test_loss:.5f}")
 
-    probabilities = model.predict(data.x_test)
+    probabilities = model.predict(x_test)
     test_accuracy = compute_multiclass_accuracy(
         probabilities,
-        data.y_test
+        y_test
     )
 
     print(f"Test dataset accuracy: {test_accuracy:.3f}")
@@ -166,8 +321,8 @@ def main():
     evaluate_and_plot_mnist(
         model=model,
         history=history,
-        x_test=data.x_test,
-        y_test=data.y_test,
+        x_test=x_test,
+        y_test=y_test,
     )
 
 

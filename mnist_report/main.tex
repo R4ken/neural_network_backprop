@@ -1,0 +1,246 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage[polish]{babel}
+\usepackage{polski}
+\usepackage{geometry}
+\geometry{
+    top=2.5cm,
+    bottom=2.5cm,
+    left=2.5cm,
+    right=2.5cm
+}
+
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{subcaption}
+\usepackage{float}
+\usepackage{microtype}
+\usepackage[hidelinks]{hyperref}
+
+\begin{document}
+
+\pagenumbering{gobble}
+
+% ==============================================================================
+% STRONA TYTUŁOWA
+% ==============================================================================
+\begin{titlepage}
+    \centering
+    \vspace*{1.5cm}
+    
+    {\scshape\Large Politechnika Warszawska \par}
+    \vspace{0.3cm}
+    {\scshape\large Wydział Matematyki i Nauk Informacyjnych \par}
+    
+    \vspace{2.5cm}
+    
+    {\huge\bfseries Projekt 1 - część druga\\[0.3em]Klasyfikacja zbioru MNIST wielowarstwowym perceptronem\par}
+    
+    
+    \vspace{0.8cm}
+    {\Large\itshape Przedmiot: Sieci Neuronowe \par}
+    
+    \vspace{3.0cm}
+    
+    \begin{minipage}[t]{0.48\textwidth}
+        \flushleft
+        \textbf{Autorzy:}\\[0.3em]
+        Jakub Rak\\
+        Krzysztof Radzewicz
+    \end{minipage}
+    \hfill
+    \begin{minipage}[t]{0.48\textwidth}
+        \flushright
+        \textbf{Prowadzący:}\\[0.3em]
+        mgr inż. Mikołaj Małkiński
+    \end{minipage}
+    \vfill
+    
+    {\large Warszawa, \today \par}
+\end{titlepage}
+
+\pagenumbering{roman}
+\tableofcontents
+\newpage
+
+\pagenumbering{arabic}
+
+\section{Opis zbioru danych MNIST}
+
+Niniejszy raport stanowi uzupełnienie pierwszego projektu laboratoryjnego.
+W pierwszej części model \textbf{MLP} testowany był na syntetycznych zbiorach dwuwymiarowych
+(klasyfikacja $\mathbb{R}^2 \to \{0, 1\}$ oraz $\mathbb{R}^2 \to \{0, 1, 2\}$) oraz regresji jednowymiarowej ($\mathbb{R} \to \mathbb{R}$).
+W tej części oceniono możliwość skalowania zaimplementowanej sieci neuronowej do danych o większym wymiarze wejściowym -
+klasycznym zbiorze \textit{MNIST} w zadaniu klasyfikajci odręcznie pisanych cyfr.
+
+Zbiór \textit{MNIST} zawiera łącznie 70~000 znormalizowanych, czarno-białych (zapisanych w 256 poziomach szarości) obrazów przedstawiających cyfry arabskie od 0 do 9.
+Dane rozbito na dwa zestawy:
+\begin{itemize}
+    \item \textbf{Zbiór treningowy}: 60~000 obrazów służących do optymalizacji parametrów modelu,
+    \item \textbf{Zbiór testowy}: 10~000 niezależnych obrazów służących do ostatecznej ewaluacji sieci.
+\end{itemize}
+
+Każda próbka to obrazek o stałych wymiarach $28 \times 28$ pikseli.
+Każdy piksel reprezentowany jest przez liczbę całkowitą z zakresu $[0, 255]$, gdzie wartość 0 oznacza tło,
+a 255 maksymalną intensywność piksela.
+
+W eksperymencie obrazy poddano spłaszczeniu do jednowymiarowego wektora cech:
+\begin{equation}
+    \mathbf{x} \in \mathbb{R}^{784}, \quad D = 28 \times 28 = 784.
+\end{equation}
+Wartości pikseli zostały znormalizowane do przedziału $[0, 1]$.
+Etykiety klas reprezentują 10 wzajemnie wykluczających się kategorii
+($y \in \{0, 1, \dots, 9\}$), które zakodowano w postaci wektorów \textit{one-hot} o długości 10.
+
+\section{Zmiany w kodzie}
+
+Implementacja modelu \textbf{MLP} nie uległa żadnym modyfikacjom. Dodano jedynie dwa moduły pomocnicze:
+\begin{itemize}
+    \item \textbf{Wczytywanie danych} (\texttt{experiments/common/data\_loader.py}): funkcja odczytująca binarne pliki IDX zbioru MNIST,
+    spłaszczająca obrazy $28 \times 28$ do wektorów o długości 784, normalizująca wartości pikseli do przedziału $[0, 1]$ oraz kodująca etykiety w formacie \textit{one-hot}.
+    \item \textbf{Wizualizacja wyników} (\texttt{experiments/common/plotting.py}): funkcje do wykreślania krzywych uczenia oraz generowania macierzy pomyłek wraz z metrykami ewaluacyjnymi na zbiorze testowym.
+\end{itemize}
+
+\section{Przebieg eksperymentu i analiza wyników}
+
+\subsection{Konfiguracja modelu i procedura uczenia}
+
+Eksperyment zrealizowano w skrypcie \texttt{experiments/run\_mnist.py}.
+Tym razem wykorzystano jedno ziarno losowości (\texttt{54217}). Gwarantuje to reprodukowalność wyników. Nie porównano procesu uczenia
+dla wielu ziaren z uwagi na czasochłonność procesu uczenia.
+Z oficjalnego zbioru treningowego (60~000 próbek) losowo wydzielono 5~000 próbek na podzbiór walidacyjny (służył do wyświetlania
+realnych postępów w uczeniu), a pozostałe 55~000 próbek przeznaczono do treningu. Niezależny zbiór testowy liczył 10~000 próbek.
+
+Wykorzystano następującą architekturę: $[784, 150, 50, 10]$.
+\begin{itemize}
+    \item \textbf{Aktywacje ukryte}: wszystkie warstwy ukryte z aktywacją \texttt{ReLU} i inicjalizacją wag \textit{He},
+    \item \textbf{Warstwa wyjściowa}: 10 neuronów z aktywacją \texttt{Softmax}, odpowiadających prawdopodobieństwom przynależności do klas $0, 1, \dots, 9$.
+\end{itemize}
+We wszystkich warstwach włączono wektory \textit{bias}.
+Jako funkcję kosztu zastosowano kategoryczną entropię krzyżową (\texttt{CategoricalCrossEntropyLoss}).
+Optymalizację prowadzono za pomocą klasycznego \texttt{SGD} ze stałym współczynnikiem uczenia $\eta = 0.05$.
+Sieć trenowano przez 30 epok z rozmiarem mini-batcha równym 32.
+
+\subsection{Dynamika uczenia — krzywe straty i dokładności}
+
+Na Rysunku~\ref{fig:mnist_learning_curves} przedstawiono przebieg uczenia modelu na przestrzeni 30 epok.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.98\textwidth]{../experiments/results/mnist/mnist_learning_curves.png}
+    \caption{Przebieg uczenia modelu MLP $[784, 150, 50, 10]$ na zbiorze MNIST: strata kategorycznej entropii krzyżowej (panel lewy) oraz dokładność klasyfikacji w procentach (panel prawy) na zbiorze uczącym i walidacyjnym.}
+    \label{fig:mnist_learning_curves}
+    \end{figure}
+
+Analiza krzywych uczenia pozwala sformułować następujące obserwacje:
+\begin{itemize}
+    \item \textbf{Funkcja straty}: W lewym panelu widać gwałtowny spadek straty w pierwszych 5 epokach.
+    Strata treningowa maleje monotonicznie i zbiega do zera. Strata walidacyjna osiąga minimum w okolicach 13--18, po czym stabilizuje się.
+    Niewielki wzrost straty walidacyjnej wskazuje że model osiągnał optimum, jednak nie zdążył jeszcze zdegradować swoich wyników.
+    \item \textbf{Krzywa dokładności}: Już po pierwszej epoce, dokładność osiąga 94\%. Jest tak ponieważ wagi są aktualizowane
+    co mini batch, co w połączeniu z bardzo dużym zbiorem treningowym (55~000 próbek) i rozmiarem mini batch 32, daje bardzo wiele aktualizacji.
+    W 30 epoce dokładność treningowa osiąga już $99.98\%$ - model dopasował się do zbioru trenignowego.
+    Dokładność walidacyjna bardzo szybko przekracza próg $97\%$ (już w 4. epoce) i szybko zbiega do wartości w granicach $97.8\% - 98.05\%$.
+    \item \textbf{Brak drastycznego przeuczenia}: Mimo braku technik regularyzacyjnych (takich jak Dropout czy regularyzacja $L_2$),
+    sieć zachowuje wysoką zdolność generalizacji, a różnica między dokładnością uczącą a walidacyjną pozostaje w rozsądnych granicach (poniżej $2$ punktów procentowych).
+\end{itemize}
+
+\subsection{Ewaluacja na zbiorze testowym i macierz pomyłek}
+
+Ostateczna ewaluacja na 10~000 niezależnych próbkach testowych wykazała całkowitą dokładność modelu na poziomie \textbf{98.00\%}
+(9~800 poprawnie sklasyfikowanych obrazów na 10~000).
+Szczegółowe metryki w rozbiciu na poszczególne cyfry zebrano w Tabeli~\ref{tab:mnist_metrics}.
+
+\begin{table}[H]
+    \centering
+    \caption{Szczegółowe metryki jakości klasyfikacji modelu MLP na zbiorze testowym MNIST ($N = 10~000$).}
+    \label{tab:mnist_metrics}
+    \resizebox{\textwidth}{!}{%
+    \begin{tabular}{crrrrrr}
+        \toprule
+        \textbf{Klasa} & \textbf{Liczba wystąpień} & \textbf{Recall (TPR)} & \textbf{Precision (PPV)} & \textbf{Specificity (TNR)} & \textbf{FPR} & \textbf{$F_1$-Score} \\
+        \midrule
+        0 & 980  & 0.9898 & 0.9838 & 0.9982 & 0.0018 & 0.9868 \\
+        1 & 1135 & 0.9912 & 0.9912 & 0.9989 & 0.0011 & 0.9912 \\
+        2 & 1032 & 0.9777 & 0.9825 & 0.9980 & 0.0020 & 0.9801 \\
+        3 & 1010 & 0.9822 & 0.9706 & 0.9967 & 0.0033 & 0.9764 \\
+        4 & 982  & 0.9786 & 0.9776 & 0.9976 & 0.0024 & 0.9781 \\
+        5 & 892  & 0.9742 & 0.9797 & 0.9980 & 0.0020 & 0.9770 \\
+        6 & 958  & 0.9812 & 0.9822 & 0.9981 & 0.0019 & 0.9817 \\
+        7 & 1028 & 0.9767 & 0.9814 & 0.9979 & 0.0021 & 0.9790 \\
+        8 & 974  & 0.9764 & 0.9814 & 0.9980 & 0.0020 & 0.9789 \\
+        9 & 1009 & 0.9703 & 0.9683 & 0.9964 & 0.0036 & 0.9693 \\
+        \midrule
+        \multicolumn{2}{l}{\textbf{Średnia arytmetyczna (makro)}} & 0.9798 & 0.9799 & 0.9978 & 0.0022 & 0.9798 \\
+        \multicolumn{2}{l}{\textbf{Średnia ważona ($N = 10~000$)}} & 0.9800 & 0.9800 & 0.9978 & 0.0022 & 0.9800 \\
+        \bottomrule
+    \end{tabular}%
+    }
+\end{table}
+
+Strukturę błędów popełnianych przez sieć szczegółowo ilustruje macierz pomyłek zaprezentowana na Rysunku~\ref{fig:mnist_confusion_matrix}.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.72\textwidth]{../experiments/results/mnist/mnist_confusion_matrix.png}
+    \caption{Znormalizowana macierz pomyłek na zbiorze testowym MNIST ($N = 10~000$). Wiersze odpowiadają etykietom prawdziwym, natomiast kolumny predykcjom modelu.}
+    \label{fig:mnist_confusion_matrix}
+    \end{figure}
+
+Z analizy macierzy pomyłek i tabeli metryk płyną konkretne wnioski:
+\begin{itemize}
+    \item \textbf{Najłatwiejsze klasy}: Model najskuteczniej rozpoznaje cyfrę \textit{1}
+    ($F_1 = 0.9912$, 1125 trafień na 1135 próbek) oraz cyfrę \textit{0} ($F_1 = 0.9868$, 970 trafień na 980 próbek).
+    Obie te cyfry są bardzo proste geometrycznie, co prawdopodobnie redukuje liczbę pomyłek.
+    \item \textbf{Przykłady błędnie sklasyfikowanych próbek}: Rysunek~\ref{fig:mnist_misclassified} przedstawia trzy przykładowe próbki ze zbioru testowego,
+    dla których model podjął błędną decyzję: cyfrę 4 sklasyfikowaną jako 9, cyfrę 5 jako 3 oraz cyfrę 7 jako 2.
+    
+    \begin{figure}[H]
+        \centering
+        \includegraphics[width=0.88\textwidth]{../experiments/results/mnist/mnist_misclassified_examples.png}
+        \caption{Przykładowe obrazy ze zbioru testowego MNIST błędnie sklasyfikowane przez model MLP, obrazujące główne pomyłki modelu.}
+        \label{fig:mnist_misclassified}
+    \end{figure}
+    
+    \item \textbf{Bardzo niska liczba fałszywych alarmów}: Wartości \textit{TNR} dla wszystkich klas wynoszą
+    co najmniej $0.9964$, a odsetek fałszywych alarmów \textit{FPR} nie przekracza $0.36\%$,
+    co wskazuje na niezawodność aktywacji Softmax bez faworyzowania żadnej z kategorii.
+\end{itemize}
+
+\section{Krótkie podsumowanie i wnioski}
+
+Przeprowadzony eksperyment na zbiorze MNIST pozwolił zweryfikować zachowanie zaimplementowanego
+wielowarstwowego perceptronu w znacznie bardziej wymagających warunkach  niż proste dane dwuwymiarowe.
+Główne wnioski można podsumować następująco:
+
+\begin{enumerate}
+    \item \textbf{Poprawność i skalowalność autorskiej implementacji}:
+    Biblioteka \texttt{py\_nn1} bez żadnych modyfikacji
+    poradziła sobie z optymalizacją modelu posiadającego ponad 125~000 parametrów wagowych
+    ($784 \times 150 + 150 \times 50 + 50 \times 10 \approx 125~850$ wag wraz z biasami)
+    na zbiorze 55~000 próbek uczących. Obliczenia przebiegły stabilnie, bez problemów
+    zanikających czy eksplodujących gradientów.
+    
+    \item \textbf{Wysoka skuteczność klasycznego MLP}:
+    Standardowy perceptron z dwiema warstwami ukrytymi ($150$ i $50$ neuronów),
+    nieliniowością \texttt{ReLU} i inicjalizacją \textit{He} uzyskał \textbf{98.00\% dokładności}
+    na 10~000 obrazów testowych.
+    
+    \item \textbf{Sprawność optymalizatora SGD}:
+    Prosty algorytm stochastycznego spadku gradientu z $\eta = 0.05$
+    i wielkością mini batcha 32 okazał się w pełni wystarczający do osiągnięcia zbieżności
+    w granicach 15--20 epok, zapewniając jednocześnie odpowiednią jakość predykcji.
+    
+    \item \textbf{Błędy klasyfikacji}:
+    Można przypuszczać że spośród nielicznych 200 błędów (na 10~000 przypadków testowych)
+    istotna część z nich wynika z podobieństwa geometrycznego między klasami cyfr.
+    Warto byłoby zbadać czy takie błędy można ograniczyć
+    stosując model który zamiast spłaszczonego wektora, przyjmowałby wejście zachowujące dwuwymiarowe zależności
+    (na przykład konwolucyjną sieć neuronową).
+\end{enumerate}
+
+\end{document}
