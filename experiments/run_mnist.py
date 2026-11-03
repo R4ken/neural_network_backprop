@@ -1,4 +1,5 @@
 import argparse
+import json
 import sys
 from pathlib import Path
 import matplotlib.pyplot as plt
@@ -28,6 +29,27 @@ from py_nn1 import (
     compute_multiclass_accuracy,
     set_seed
 )
+
+
+DEFAULT_SEEDS = list(range(54217, 54227))
+CURVE_KEYS = ("loss", "val_loss", "accuracy", "val_accuracy")
+
+
+def aggregate_histories(histories: list[dict]) -> tuple[dict, dict]:
+    """Return per-epoch means and population standard deviations (ddof=0)."""
+    if not histories:
+        raise ValueError("At least one training history is required.")
+    means, stds = {}, {}
+    epoch_count = len(histories[0]["loss"])
+    if epoch_count == 0:
+        raise ValueError("Training histories must contain at least one epoch.")
+    for key in CURVE_KEYS:
+        runs = np.asarray([history[key] for history in histories], dtype=float)
+        if runs.shape != (len(histories), epoch_count) or not np.all(np.isfinite(runs)):
+            raise ValueError(f"Invalid or inconsistent histories for {key}.")
+        means[key] = runs.mean(axis=0).tolist()
+        stds[key] = runs.std(axis=0, ddof=0).tolist()
+    return means, stds
 
 
 def plot_misclassified_samples(
@@ -200,7 +222,7 @@ def evaluate_and_plot_mnist(
     }
 
 
-def parse_args():
+def parse_args(argv=None):
     parser = argparse.ArgumentParser(description="Trenowanie i ewaluacja modelu MLP na zbiorze MNIST.")
     parser.add_argument(
         "--epochs",
@@ -243,18 +265,34 @@ def parse_args():
         action="store_true",
         help="Tryb szybki (1 epoka, 1000 probek) do testow technicznych."
     )
-    return parser.parse_args()
+    parser.add_argument("--seeds", type=int, nargs="+", default=DEFAULT_SEEDS,
+                        help="Ziarna treningu (domyslnie: 54217--54226, 10 uruchomien).")
+    parser.add_argument("--split-seed", type=int, default=54217,
+                        help="Stale ziarno podzialu trening/walidacja (domyslnie: 54217).")
+    parser.add_argument("--results-dir", type=Path, default=None,
+                        help="Katalog wynikow; tryb quick domyslnie zapisuje w mnist/quick.")
+    args = parser.parse_args(argv)
+    for name in ("epochs", "batch_size", "learning_rate", "eval_samples", "train_samples", "test_samples"):
+        value = getattr(args, name)
+        if value is not None and value <= 0:
+            parser.error(f"--{name.replace('_', '-')} musi byc dodatnie.")
+    if len(set(args.seeds)) != len(args.seeds):
+        parser.error("Ziarna treningu musza byc rozne.")
+    if any(seed < 0 or seed >= 2**32 for seed in [*args.seeds, args.split_seed]):
+        parser.error("Ziarna musza nalezec do przedzialu [0, 2**32).")
+    return args
 
 
 def main():
     args = parse_args()
-    set_seed(54217)
 
     data = load_mnist_data()
-    rng = np.random.default_rng(54217)
+    rng = np.random.default_rng(args.split_seed)
     indices = rng.permutation(len(data.x_train))
 
     eval_count = 200 if args.quick else args.eval_samples
+    if eval_count >= len(indices):
+        raise ValueError("Validation split must leave at least one training sample.")
     eval_indices = indices[:eval_count]
     remaining_indices = indices[eval_count:]
 
@@ -264,6 +302,9 @@ def main():
     else:
         train_count = args.train_samples if args.train_samples is not None else len(remaining_indices)
         epochs = args.epochs
+
+    if train_count > len(remaining_indices):
+        raise ValueError("Requested training sample count exceeds the available split.")
 
     train_indices = remaining_indices[:train_count]
 
@@ -278,52 +319,66 @@ def main():
         x_test = data.x_test[:test_count]
         y_test = data.y_test[:test_count]
     elif args.test_samples is not None:
+        if args.test_samples > len(data.x_test):
+            raise ValueError("Requested test sample count exceeds the available test split.")
         x_test = data.x_test[:args.test_samples]
         y_test = data.y_test[:args.test_samples]
     else:
         x_test = data.x_test
         y_test = data.y_test
 
-    model = MLP.from_dimensions(
-        layer_dims=[784, 150, 50, 10],
-        hidden_activation=ReLU,
-        output_activation=Softmax,
-        use_bias=True,
-        weight_init="he"
+    target_dir = args.results_dir or Path(__file__).resolve().parent / "results" / "mnist"
+    if args.quick and args.results_dir is None:
+        target_dir /= "quick"
+    target_dir.mkdir(parents=True, exist_ok=True)
+    print(f"Liczba probek: trening={len(x_train)}, walidacja={len(x_eval)}, test={len(x_test)}")
+    summary = {
+        "seeds": args.seeds, "split_seed": args.split_seed,
+        "train_samples": len(x_train), "eval_samples": len(x_eval), "test_samples": len(x_test),
+        "epochs": epochs, "batch_size": args.batch_size, "learning_rate": args.learning_rate,
+        "layer_dims": [784, 150, 50, 10], "std_ddof": 0, "quick": args.quick,
+        "representative_seed": args.seeds[0], "runs": [],
+    }
+    histories = []
+    for seed in args.seeds:
+        print(f"\nZiarno {seed} ({len(histories) + 1}/{len(args.seeds)})", flush=True)
+        set_seed(seed)
+        model = MLP.from_dimensions(
+            layer_dims=[784, 150, 50, 10], hidden_activation=ReLU,
+            output_activation=Softmax, use_bias=True, weight_init="he",
+        )
+        loss_fn = CategoricalCrossEntropyLoss()
+        history = model.fit(
+            x_train=x_train, y_train=y_train, loss_fn=loss_fn,
+            optimizer=SGD(learning_rate=args.learning_rate), epochs=epochs,
+            batch_size=args.batch_size, validation_data=(x_eval, y_eval),
+            metrics={"accuracy": compute_multiclass_accuracy}, verbose=True,
+        )
+        curves = {key: history[key] for key in CURVE_KEYS}
+        histories.append(curves)
+        summary["runs"].append({
+            "seed": seed, "history": curves,
+            "test_loss": float(model.evaluate(x_test, y_test, loss_fn)),
+            "test_accuracy": float(compute_multiclass_accuracy(model.predict(x_test), y_test)),
+        })
+        # Keep the original seed's test figures separate from the aggregate curves.
+        if seed == args.seeds[0]:
+            evaluate_and_plot_mnist(model, history, x_test, y_test, results_dir=target_dir)
+        # Save progress after each completed seed, including raw curves for reproducibility.
+        (target_dir / "mnist_training_summary.json").write_text(
+            json.dumps(summary, indent=2), encoding="utf-8",
+        )
+
+    summary["mean"], summary["std"] = aggregate_histories(histories)
+    (target_dir / "mnist_training_summary.json").write_text(
+        json.dumps(summary, indent=2), encoding="utf-8",
     )
-
-    loss_fn = CategoricalCrossEntropyLoss()
-    optimizer = SGD(learning_rate=args.learning_rate)
-
-    history = model.fit(
-        x_train=x_train,
-        y_train=y_train,
-        loss_fn=loss_fn,
-        optimizer=optimizer,
-        epochs=epochs,
-        batch_size=args.batch_size,
-        validation_data=(x_eval, y_eval),
-        metrics={"accuracy": compute_multiclass_accuracy},
-        verbose=True
+    curves_path = target_dir / "mnist_learning_curves_mean_std.png"
+    plot_training_and_validation_curves(
+        summary["mean"], history_std=summary["std"], save_path=curves_path,
+        title=f"MNIST: średnia z {len(histories)} ziaren ± odchylenie standardowe",
     )
-
-    test_loss = model.evaluate(x_test, y_test, loss_fn)
-    print(f"Loss: {test_loss:.5f}")
-
-    probabilities = model.predict(x_test)
-    test_accuracy = compute_multiclass_accuracy(
-        probabilities,
-        y_test
-    )
-
-    print(f"Test dataset accuracy: {test_accuracy:.3f}")
-
-    evaluate_and_plot_mnist(
-        model=model,
-        history=history,
-        x_test=x_test,
-        y_test=y_test,
-    )
+    print(f"Zapisano usrednione krzywe uczenia: {curves_path}")
 
 
 if __name__ == "__main__":

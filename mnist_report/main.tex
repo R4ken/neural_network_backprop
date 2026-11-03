@@ -80,7 +80,7 @@ klasycznym zbiorze \textit{MNIST} w zadaniu klasyfikajci odręcznie pisanych cyf
 Zbiór \textit{MNIST} zawiera łącznie 70~000 znormalizowanych, czarno-białych (zapisanych w 256 poziomach szarości) obrazów przedstawiających cyfry arabskie od 0 do 9.
 Dane rozbito na dwa zestawy:
 \begin{itemize}
-    \item \textbf{Zbiór treningowy}: 60~000 obrazów służących do optymalizacji parametrów modelu,
+    \item \textbf{Oficjalny zbiór treningowy}: 60~000 obrazów, z których w eksperymencie 55~000 służyło do optymalizacji parametrów, a 5~000 do walidacji,
     \item \textbf{Zbiór testowy}: 10~000 niezależnych obrazów służących do ostatecznej ewaluacji sieci.
 \end{itemize}
 
@@ -110,10 +110,17 @@ Implementacja modelu \textbf{MLP} nie uległa żadnym modyfikacjom. Dodano jedyn
 \subsection{Konfiguracja modelu i procedura uczenia}
 
 Eksperyment zrealizowano w skrypcie \texttt{experiments/run\_mnist.py}.
-Tym razem wykorzystano jedno ziarno losowości (\texttt{54217}). Gwarantuje to reprodukowalność wyników. Nie porównano procesu uczenia
-dla wielu ziaren z uwagi na czasochłonność procesu uczenia.
+Krzywe dynamiki uczenia uśredniono po 10 uruchomieniach z ziarnami losowości
+\texttt{54217--54226}. Ziarna te sterowały inicjalizacją wag i tasowaniem mini-batchy.
+Podział na próbki uczące i walidacyjne był taki sam dla wszystkich uruchomień
+(ziarno podziału: \texttt{54217}), dzięki czemu pasma zmienności opisują wpływ losowości treningu,
+a nie zmiany składu podzbiorów. Tabela metryk, macierz pomyłek i przykłady błędów
+w dalszej części raportu dotyczą pojedynczego modelu z dotychczasowym ziarnem \texttt{54217}.
 Z oficjalnego zbioru treningowego (60~000 próbek) losowo wydzielono 5~000 próbek na podzbiór walidacyjny (służył do wyświetlania
 realnych postępów w uczeniu), a pozostałe 55~000 próbek przeznaczono do treningu. Niezależny zbiór testowy liczył 10~000 próbek.
+Liczebność testu potwierdzono w nagłówkach obu lokalnych plików IDX
+(\texttt{t10k-images.idx3-ubyte} i \texttt{t10k-labels.idx1-ubyte});
+ewaluacja korzystała z całego tego zbioru, bez opcji ograniczającej liczbę próbek.
 
 Wykorzystano następującą architekturę: $[784, 150, 50, 10]$.
 \begin{itemize}
@@ -128,30 +135,40 @@ Sieć trenowano przez 30 epok z rozmiarem mini-batcha równym 32.
 \subsection{Dynamika uczenia — krzywe straty i dokładności}
 
 Na Rysunku~\ref{fig:mnist_learning_curves} przedstawiono przebieg uczenia modelu na przestrzeni 30 epok.
+Każda linia przedstawia średnią danej metryki w danej epoce z 10 ziaren,
+a półprzezroczyste pasmo zakres średnia $\pm$ jedno odchylenie standardowe.
+Odchylenie obliczono jako $\sigma_e = \sqrt{\frac{1}{10}\sum_{s=1}^{10}(m_{s,e}-\bar{m}_e)^2}$,
+gdzie $m_{s,e}$ jest wartością metryki dla ziarna $s$ w epoce $e$.
+Pasmo opisuje rozrzut wyników między uruchomieniami, nie przedział ufności średniej.
 
 \begin{figure}[H]
     \centering
-    \includegraphics[width=0.98\textwidth]{../experiments/results/mnist/mnist_learning_curves.png}
-    \caption{Przebieg uczenia modelu MLP $[784, 150, 50, 10]$ na zbiorze MNIST: strata kategorycznej entropii krzyżowej (panel lewy) oraz dokładność klasyfikacji w procentach (panel prawy) na zbiorze uczącym i walidacyjnym.}
+    \includegraphics[width=0.98\textwidth]{../experiments/results/mnist/mnist_learning_curves_mean_std.png}
+    \caption{Przebieg uczenia modelu MLP $[784, 150, 50, 10]$ na zbiorze MNIST: strata kategorycznej entropii krzyżowej (panel lewy) oraz dokładność klasyfikacji w procentach (panel prawy) na zbiorze uczącym i walidacyjnym. Linie: średnie z 10 ziaren; pasma: $\pm 1\sigma$ między ziarnami.}
     \label{fig:mnist_learning_curves}
     \end{figure}
 
 Analiza krzywych uczenia pozwala sformułować następujące obserwacje:
 \begin{itemize}
     \item \textbf{Funkcja straty}: W lewym panelu widać gwałtowny spadek straty w pierwszych 5 epokach.
-    Strata treningowa maleje monotonicznie i zbiega do zera. Strata walidacyjna osiąga minimum w okolicach 13--18, po czym stabilizuje się.
-    Niewielki wzrost straty walidacyjnej wskazuje że model osiągnał optimum, jednak nie zdążył jeszcze zdegradować swoich wyników.
-    \item \textbf{Krzywa dokładności}: Już po pierwszej epoce, dokładność osiąga 94\%. Jest tak ponieważ wagi są aktualizowane
+    Średnia strata treningowa zbliża się do zera. Stratę walidacyjną należy interpretować razem z pasmem zmienności:
+    jej wzrost mimo dalszego spadku straty treningowej jest oznaką przeuczenia według tej metryki,
+    nawet jeśli dokładność walidacyjna pozostaje wysoka.
+    Minimum średniej straty walidacyjnej przypada na 17. epokę; w 30. epoce wynosi ona
+    $0.0782 \pm 0.0045$, przy stracie treningowej około $0.00124$.
+    \item \textbf{Krzywa dokładności}: Dokładność rośnie szybko już w pierwszych epokach. Jest tak ponieważ wagi są aktualizowane
     co mini batch, co w połączeniu z bardzo dużym zbiorem treningowym (55~000 próbek) i rozmiarem mini batch 32, daje bardzo wiele aktualizacji.
-    W 30 epoce dokładność treningowa osiąga już $99.98\%$ - model dopasował się do zbioru trenignowego.
-    Dokładność walidacyjna bardzo szybko przekracza próg $97\%$ (już w 4. epoce) i szybko zbiega do wartości w granicach $97.8\% - 98.05\%$.
-    \item \textbf{Brak drastycznego przeuczenia}: Mimo braku technik regularyzacyjnych (takich jak Dropout czy regularyzacja $L_2$),
-    sieć zachowuje wysoką zdolność generalizacji, a różnica między dokładnością uczącą a walidacyjną pozostaje w rozsądnych granicach (poniżej $2$ punktów procentowych).
+    Pod koniec treningu dokładność ucząca jest bliska $100\%$.
+    W 30. epoce średnia dokładność walidacyjna wynosi $97.976\%$,
+    a jej odchylenie standardowe między ziarnami to $0.150$ punktu procentowego.
+    \item \textbf{Zmienność między ziarnami}: Pasma pokazują wrażliwość procesu uczenia na inicjalizację wag
+    i kolejność mini-batchy przy stałym podziale danych. Pozwala to ocenić powtarzalność przebiegu uczenia
+    bez opierania wniosków wyłącznie na pojedynczym uruchomieniu.
 \end{itemize}
 
 \subsection{Ewaluacja na zbiorze testowym i macierz pomyłek}
 
-Ostateczna ewaluacja na 10~000 niezależnych próbkach testowych wykazała całkowitą dokładność modelu na poziomie \textbf{98.00\%}
+Ostateczna ewaluacja modelu dla ziarna \texttt{54217} na 10~000 niezależnych próbkach testowych wykazała całkowitą dokładność na poziomie \textbf{98.00\%}
 (9~800 poprawnie sklasyfikowanych obrazów na 10~000).
 Szczegółowe metryki w rozbiciu na poszczególne cyfry zebrano w Tabeli~\ref{tab:mnist_metrics}.
 

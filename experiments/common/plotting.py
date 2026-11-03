@@ -1777,6 +1777,7 @@ def plot_training_and_validation_curves(
     history: dict[str, list[float]],
     save_path: Path | str | None = None,
     title: str | None = None,
+    history_std: dict[str, list[float]] | None = None,
 ) -> Path:
     """Plots training and validation loss & accuracy curves side-by-side in a 1x2 panel layout.
 
@@ -1785,6 +1786,8 @@ def plot_training_and_validation_curves(
         save_path: Destination path for saving the figure. Defaults to
             'experiments/results/mnist/mnist_learning_curves.png'.
         title: Main title in Polish.
+        history_std: Optional per-epoch standard deviations across seeds, with
+            the same keys and units as history. Shown as mean +/- one std.
 
     Returns:
         Path to the saved figure file.
@@ -1863,6 +1866,23 @@ def plot_training_and_validation_curves(
     ax_acc.grid(True, linestyle="--", alpha=0.5)
     if has_acc or has_val_acc:
         ax_acc.legend(loc="lower right", fontsize=10)
+
+    if history_std is not None:
+        for ax, key, color in (
+            (ax_loss, "loss", "#1f77b4"),
+            (ax_loss, "val_loss", "#ff7f0e"),
+            (ax_acc, "accuracy", "#1f77b4"),
+            (ax_acc, "val_accuracy", "#2ca02c"),
+        ):
+            mean = np.asarray(history[key], dtype=float)
+            std = np.asarray(history_std[key], dtype=float)
+            if mean.shape != (n_epochs,) or std.shape != mean.shape:
+                raise ValueError(f"Inconsistent epoch counts for {key}.")
+            if not np.all(np.isfinite(std)) or np.any(std < 0):
+                raise ValueError(f"Invalid standard deviations for {key}.")
+            scale = 100.0 if "accuracy" in key and np.max(mean) <= 1.0 else 1.0
+            ax.fill_between(epochs, (mean - std) * scale, (mean + std) * scale,
+                            color=color, alpha=0.18)
 
     if title is None:
         title = "Przebieg uczenia modelu MLP na zbiorze MNIST"
